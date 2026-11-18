@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Optimus Launcher</string>
+    <string name="nav">Navigatie</string>
+    <string name="music">Muziek</string>
+    <string name="phone">Telefoon</string>
+    <string name="radio">Radio</string>
+    <string name="apps">Apps</string>
+    <string name="settings">Instellingen</string>
+</resources>
