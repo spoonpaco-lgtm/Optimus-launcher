@@ -54,7 +54,7 @@ public class MainActivity extends Activity {
     private static boolean updateCheckedThisRun = false;
 
     private TextView clock, date, speed, trip;
-    private TextView stNet, stGps, stPhone, stFlits, stTank;
+    private TextView stNet, stGps, stPhone, stFlits, stLog, stTank;
     private Store store;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -83,6 +83,7 @@ public class MainActivity extends Activity {
         stGps = findViewById(R.id.st_gps);
         stPhone = findViewById(R.id.st_phone);
         stFlits = findViewById(R.id.st_flits);
+        stLog = findViewById(R.id.st_log);
         stTank = findViewById(R.id.st_tank);
 
         wireApp(R.id.btn_nav, PKG_MAPS, getString(R.string.nav));
@@ -183,6 +184,11 @@ public class MainActivity extends Activity {
         boolean flits = getPackageManager().getLaunchIntentForPackage(PKG_FLITS) != null;
         setStatus(stFlits, flits ? R.color.fg : R.color.off,
                 flits ? "● Flitsmeister" : "● Flitsmeister ✕");
+
+        // Autolog
+        int lg = CarLogger.state;
+        setStatus(stLog, lg == 2 ? R.color.ok : lg == 1 ? R.color.warn : R.color.off,
+                lg == 1 ? "● Autolog (alleen GPS)" : "● Autolog");
 
         // Tank
         int range = store.rangeKm();

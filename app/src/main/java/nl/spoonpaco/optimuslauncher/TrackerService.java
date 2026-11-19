@@ -32,6 +32,7 @@ public class TrackerService extends Service implements LocationListener {
     private LocationManager lm;
     private Location last;
     private Store store;
+    private long lastGpsNote = 0L;
 
     @Override
     public void onCreate() {
@@ -49,7 +50,9 @@ public class TrackerService extends Service implements LocationListener {
                 .build();
         startForeground(1, n);
 
-        lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        CarLogger.start(this);
+
+        lm =(LocationManager) getSystemService(Context.LOCATION_SERVICE);
         if (lm == null || lm.getProvider(LocationManager.GPS_PROVIDER) == null) {
             gpsPresent = false;
             return;
@@ -68,6 +71,7 @@ public class TrackerService extends Service implements LocationListener {
 
     @Override
     public void onDestroy() {
+        CarLogger.stop();
         if (lm != null) {
             try { lm.removeUpdates(this); } catch (Exception ignored) { }
         }
@@ -83,6 +87,14 @@ public class TrackerService extends Service implements LocationListener {
         lastFixTime = now;
         float kmh = loc.hasSpeed() ? loc.getSpeed() * 3.6f : 0f;
         speedKmh = kmh;
+
+        if (now - lastGpsNote >= 5000) {
+            lastGpsNote = now;
+            CarLogger.note(String.format(java.util.Locale.US,
+                    "gps kmh=%.1f acc=%.0f lat=%.5f lon=%.5f",
+                    kmh, loc.hasAccuracy() ? loc.getAccuracy() : -1f,
+                    loc.getLatitude(), loc.getLongitude()));
+        }
 
         if (!loc.hasAccuracy() || loc.getAccuracy() > MAX_ACCURACY_M) return;
 

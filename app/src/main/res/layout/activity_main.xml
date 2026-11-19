@@ -20,6 +20,7 @@
         <TextView android:id="@+id/st_gps" style="@style/Status" android:text="● GPS" />
         <TextView android:id="@+id/st_phone" style="@style/Status" android:text="● Telefoon" />
         <TextView android:id="@+id/st_flits" style="@style/Status" android:text="● Flitsmeister" />
+        <TextView android:id="@+id/st_log" style="@style/Status" android:text="● Autolog" />
 
         <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
 
