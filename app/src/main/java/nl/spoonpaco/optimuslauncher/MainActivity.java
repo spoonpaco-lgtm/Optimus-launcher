@@ -44,19 +44,15 @@ import java.util.Set;
 public class MainActivity extends Activity {
 
     private static final Locale NL = new Locale("nl");
-    private static final String PKG_NAV = "app.organicmaps";
     /** Android Auto-ontvanger van FlyAudio */
     private static final String PKG_AA = "com.carletter.car";
-    private static final String PKG_SPOTIFY = "com.spotify.music";
-    private static final String PKG_PHONE = "com.flyaudio.phone";
     private static final String PKG_RADIO = "com.flyaudio.media.radio";
-    private static final String PKG_FLITS = "nl.flitsmeister";
     private static final int REQ_LOCATION = 1;
 
     private static boolean updateCheckedThisRun = false;
 
     private TextView clock, date, speed, trip;
-    private TextView stNet, stGps, stPhone, stFlits, stLog, stTank;
+    private TextView stNet, stGps, stPhone, stLog, stTank;
     private Store store;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -84,12 +80,16 @@ public class MainActivity extends Activity {
         stNet = findViewById(R.id.st_net);
         stGps = findViewById(R.id.st_gps);
         stPhone = findViewById(R.id.st_phone);
-        stFlits = findViewById(R.id.st_flits);
         stLog = findViewById(R.id.st_log);
         stTank = findViewById(R.id.st_tank);
 
-        wireApp(R.id.btn_nav, PKG_NAV, "Organic Maps");
         wireApp(R.id.btn_aa, PKG_AA, "Android Auto (CarLetter)");
+        // Lang indrukken op Android Auto: afspelen/pauze zonder van scherm te wisselen
+        findViewById(R.id.btn_aa).setOnLongClickListener(v -> {
+            mediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE);
+            toast("Afspelen / pauze");
+            return true;
+        });
         // EQ: geluidsinstellingen van FlyAudio
         findViewById(R.id.btn_eq).setOnClickListener(v -> {
             for (String pk : new String[]{"com.flyaudio.soundeffect", "com.flyaudio.service.dsp", "com.flyaudio.settings"}) {
@@ -97,25 +97,10 @@ public class MainActivity extends Activity {
             }
             toast("Geen EQ-app gevonden");
         });
-        // Muziek: scherm van Android Auto (Spotify draait op de telefoon);
-        // geen AA-app -> Spotify op de tablet -> Bluetooth-muziek
-        findViewById(R.id.btn_music).setOnClickListener(v -> {
-            if (installed(PKG_AA)) launch(PKG_AA, "Android Auto");
-            else if (installed(PKG_SPOTIFY)) launch(PKG_SPOTIFY, "Spotify");
-            else launch("com.flyaudio.btmusic", "Bluetooth-muziek");
-        });
-        // Lang indrukken: afspelen/pauze zonder van scherm te wisselen
-        findViewById(R.id.btn_music).setOnLongClickListener(v -> {
-            mediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE);
-            toast("Afspelen / pauze");
-            return true;
-        });
 
         // Tik op de snelheid: zwevend snelheidsvenster aan/uit (boven Android Auto)
         speed.setOnClickListener(v -> toggleOverlay());
-        wireApp(R.id.btn_phone, PKG_PHONE, getString(R.string.phone));
         wireApp(R.id.btn_radio, PKG_RADIO, getString(R.string.radio));
-        wireApp(R.id.st_flits, PKG_FLITS, "Flitsmeister");
 
         // Verborgen debugscherm: klok lang ingedrukt houden
         clock.setOnLongClickListener(v -> {
@@ -230,10 +215,6 @@ public class MainActivity extends Activity {
         setStatus(stPhone, bt == 2 ? R.color.ok : bt == 1 ? R.color.bad : R.color.off,
                 bt == 0 ? "● Telefoon ?" : "● Telefoon");
 
-        // Flitsmeister
-        boolean flits = getPackageManager().getLaunchIntentForPackage(PKG_FLITS) != null;
-        setStatus(stFlits, flits ? R.color.fg : R.color.off,
-                flits ? "● Flitsmeister" : "● Flitsmeister ✕");
 
         // Autolog
         int lg = CarLogger.state;

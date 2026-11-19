@@ -19,7 +19,6 @@
         <TextView android:id="@+id/st_net" style="@style/Status" android:text="● Internet" />
         <TextView android:id="@+id/st_gps" style="@style/Status" android:text="● GPS" />
         <TextView android:id="@+id/st_phone" style="@style/Status" android:text="● Telefoon" />
-        <TextView android:id="@+id/st_flits" style="@style/Status" android:text="● Flitsmeister" />
         <TextView android:id="@+id/st_log" style="@style/Status" android:text="● Autolog" />
 
         <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
@@ -101,19 +100,16 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:columnCount="5"
+        android:columnCount="4"
         android:rowCount="2"
         android:alignmentMode="alignBounds"
         android:useDefaultMargins="false">
 
-        <Button android:id="@+id/btn_aa" style="@style/Tile" android:text="@string/aa" />
-        <Button android:id="@+id/btn_nav" style="@style/Tile" android:text="@string/nav" />
-        <Button android:id="@+id/btn_music" style="@style/Tile" android:text="@string/music" />
-        <Button android:id="@+id/btn_phone" style="@style/Tile" android:text="@string/phone" />
+        <Button android:id="@+id/btn_aa" style="@style/Tile" android:layout_columnSpan="2" android:text="@string/aa" />
         <Button android:id="@+id/btn_radio" style="@style/Tile" android:text="@string/radio" />
         <Button android:id="@+id/btn_eq" style="@style/Tile" android:text="@string/eq" />
-        <Button android:id="@+id/btn_apps" style="@style/Tile" android:text="@string/apps" />
         <Button android:id="@+id/btn_fuel" style="@style/Tile" android:text="@string/fuel" />
+        <Button android:id="@+id/btn_apps" style="@style/Tile" android:text="@string/apps" />
         <Button android:id="@+id/btn_settings" style="@style/Tile" android:text="@string/settings" />
         <Button android:id="@+id/btn_update" style="@style/Tile" android:text="@string/update" />
 
