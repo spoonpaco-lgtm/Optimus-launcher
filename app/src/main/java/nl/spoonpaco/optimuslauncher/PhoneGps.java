@@ -23,6 +23,7 @@ public class PhoneGps {
     public interface Listener { void onPhoneLocation(Location loc); }
 
     public static final UUID LINK_UUID = UUID.fromString("6f7c1a3e-2b9d-4c55-9a1e-0b5e4c0f7a11");
+    public static final UUID LINK_UUID_SECURE = UUID.fromString("6f7c1a3e-2b9d-4c55-9a1e-0b5e4c0f7a12");
     public static final int UDP_PORT = 47474;
 
     public static volatile long lastMsg = 0L;
@@ -42,9 +43,12 @@ public class PhoneGps {
         Thread u = new Thread(PhoneGps::udpLoop, "phonegps-udp");
         u.setDaemon(true);
         u.start();
-        Thread b = new Thread(PhoneGps::btLoop, "phonegps-bt");
+        Thread b = new Thread(() -> btLoop(false), "phonegps-bt");
         b.setDaemon(true);
         b.start();
+        Thread bs = new Thread(() -> btLoop(true), "phonegps-bt-secure");
+        bs.setDaemon(true);
+        bs.start();
     }
 
     public static boolean fresh() {
@@ -67,14 +71,16 @@ public class PhoneGps {
         }
     }
 
-    private static void btLoop() {
+    private static void btLoop(boolean secure) {
         while (true) {
             BluetoothAdapter ad = BluetoothAdapter.getDefaultAdapter();
             if (ad == null || !ad.isEnabled()) { sleep(10000); continue; }
             BluetoothServerSocket ss = null;
             BluetoothSocket s = null;
             try {
-                ss = ad.listenUsingInsecureRfcommWithServiceRecord("OptimusLink", LINK_UUID);
+                ss = secure
+                        ? ad.listenUsingRfcommWithServiceRecord("OptimusLinkS", LINK_UUID_SECURE)
+                        : ad.listenUsingInsecureRfcommWithServiceRecord("OptimusLink", LINK_UUID);
                 btWaiting = true;
                 s = ss.accept();
                 btWaiting = false;
@@ -83,9 +89,10 @@ public class PhoneGps {
                 btClient = true;
                 BufferedReader br = new BufferedReader(new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
                 String line;
-                while ((line = br.readLine()) != null) handle(line.trim(), "bluetooth");
+                String route = secure ? "bluetooth (beveiligd)" : "bluetooth";
+                while ((line = br.readLine()) != null) handle(line.trim(), route);
             } catch (Exception e) {
-                lastError = "bluetooth: " + e.getMessage();
+                lastError = (secure ? "bt-beveiligd: " : "bt: ") + e.getMessage();
             } finally {
                 btWaiting = false;
                 btClient = false;

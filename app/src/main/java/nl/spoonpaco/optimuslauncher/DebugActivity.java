@@ -138,6 +138,7 @@ public class DebugActivity extends Activity {
                 ? String.format(L, "gecorrigeerd met telefoon (%+d s)", Clock.offsetMs / 1000)
                 : "geen correctie").append('\n');
         if (!PhoneGps.lastError.isEmpty()) s.append("melding: ").append(PhoneGps.lastError).append('\n');
+        s.append(btInfo());
         s.append('\n');
 
         // ---- Netwerk / ADB ----
@@ -208,6 +209,31 @@ public class DebugActivity extends Activity {
         if (sec < 60) return sec + " s geleden";
         if (sec < 3600) return (sec / 60) + " min geleden";
         return (sec / 3600) + " u geleden";
+    }
+
+    /** Eigen Bluetooth-adres en gekoppelde toestellen (om met Optimus Link te vergelijken). */
+    private String btInfo() {
+        StringBuilder sb = new StringBuilder();
+        try {
+            android.bluetooth.BluetoothAdapter ad = android.bluetooth.BluetoothAdapter.getDefaultAdapter();
+            if (ad == null) return "Android-Bluetooth: geen adapter\n";
+            String addr = ad.getAddress();
+            if (addr == null || addr.startsWith("02:00:00")) {
+                try { addr = Settings.Secure.getString(getContentResolver(), "bluetooth_address"); } catch (Exception ignored) { }
+            }
+            sb.append("Android-Bluetooth: ").append(ad.isEnabled() ? "aan" : "uit")
+              .append("  naam=").append(ad.getName())
+              .append("  adres=").append(addr == null ? "?" : addr).append('\n');
+            java.util.Set<android.bluetooth.BluetoothDevice> b = ad.getBondedDevices();
+            if (b != null) {
+                for (android.bluetooth.BluetoothDevice d : b) {
+                    sb.append("  gekoppeld: ").append(d.getName()).append(" (").append(d.getAddress()).append(")\n");
+                }
+            }
+        } catch (Exception e) {
+            sb.append("Android-Bluetooth: fout ").append(e.getMessage()).append('\n');
+        }
+        return sb.toString();
     }
 
     private String ips() {

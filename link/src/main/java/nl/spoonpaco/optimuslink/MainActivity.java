@@ -152,7 +152,8 @@ public class MainActivity extends Activity {
         StringBuilder s = new StringBuilder();
         s.append("Dienst: ").append(LinkService.running ? "actief" : "uit").append('\n');
         s.append("Auto (Bluetooth): ").append(car == null ? "nog niet gekozen" : car).append('\n');
-        s.append("Bluetooth naar auto: ").append(LinkService.btConnected ? "verbonden" : "niet verbonden").append('\n');
+        s.append("Bluetooth naar auto: ").append(LinkService.btConnected ? "verbonden" : "niet verbonden")
+                .append("  (kanaal: ").append(LinkService.btMode).append(")\n");
         s.append("Wifi van de auto: ").append(LinkService.wifiCar ? "ja" : "nee").append('\n');
         s.append("GPS: ").append(LinkService.gpsOn ? "aan" : "uit");
         if (LinkService.lastFix > 0) s.append(", laatste positie ").append((now - LinkService.lastFix) / 1000).append(" s geleden");

@@ -45,6 +45,9 @@ import java.util.UUID;
 public class LinkService extends Service implements LocationListener {
 
     public static final UUID LINK_UUID = UUID.fromString("6f7c1a3e-2b9d-4c55-9a1e-0b5e4c0f7a11");
+    public static final UUID LINK_UUID_SECURE = UUID.fromString("6f7c1a3e-2b9d-4c55-9a1e-0b5e4c0f7a12");
+    /** Welke route laatst werkte/geprobeerd werd (voor het scherm). */
+    public static volatile String btMode = "-";
     public static final int UDP_PORT = 47474;
     public static final String PREFS = "link";
     public static final String KEY_CAR = "carAddress";
@@ -187,9 +190,8 @@ public class LinkService extends Service implements LocationListener {
             BluetoothSocket s = null;
             try {
                 BluetoothDevice d = ad.getRemoteDevice(addr);
-                s = d.createInsecureRfcommSocketToServiceRecord(LINK_UUID);
                 try { ad.cancelDiscovery(); } catch (Exception ignored) { }
-                s.connect();
+                s = connectAny(d);
                 btSock = s;
                 btOut = s.getOutputStream();
                 btConnected = true;
@@ -208,6 +210,29 @@ public class LinkService extends Service implements LocationListener {
             }
             sleep(8000);
         }
+    }
+
+    /** Probeert eerst het beveiligde kanaal (gekoppelde toestellen), dan het onbeveiligde. */
+    private BluetoothSocket connectAny(BluetoothDevice d) throws Exception {
+        StringBuilder errs = new StringBuilder();
+        try {
+            BluetoothSocket s = d.createRfcommSocketToServiceRecord(LINK_UUID_SECURE);
+            s.connect();
+            btMode = "beveiligd";
+            return s;
+        } catch (Exception e) {
+            errs.append("beveiligd: ").append(e.getMessage()).append(" | ");
+        }
+        try {
+            BluetoothSocket s = d.createInsecureRfcommSocketToServiceRecord(LINK_UUID);
+            s.connect();
+            btMode = "onbeveiligd";
+            return s;
+        } catch (Exception e) {
+            errs.append("onbeveiligd: ").append(e.getMessage());
+        }
+        btMode = "mislukt";
+        throw new Exception(errs.toString());
     }
 
     private void closeBt() {
