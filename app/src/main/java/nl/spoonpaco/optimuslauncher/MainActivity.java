@@ -239,6 +239,14 @@ public class MainActivity extends Activity {
         try {
             BluetoothAdapter ad = BluetoothAdapter.getDefaultAdapter();
             if (ad == null || !ad.isEnabled()) return 0;
+            // De head unit is de "handsfree-kant": telefoon komt binnen via
+            // HEADSET_CLIENT (16) / A2DP_SINK (11). Ook de gewone profielen checken.
+            int[] profiles = {16, 11, 1, 2};
+            for (int pr : profiles) {
+                try {
+                    if (ad.getProfileConnectionState(pr) == BluetoothAdapter.STATE_CONNECTED) return 2;
+                } catch (Exception ignored) { }
+            }
             Set<BluetoothDevice> bonded = ad.getBondedDevices();
             if (bonded == null) return 0;
             Method isConnected = BluetoothDevice.class.getMethod("isConnected");

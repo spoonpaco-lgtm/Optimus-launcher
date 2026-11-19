@@ -116,7 +116,33 @@ public class CarLogger {
         }
     }
 
+    /**
+     * Ruis die geen autodata bevat en het logboek in minuten volspamt
+     * (gemeten op de tablet: GPS-driver, nep-handtekening, geluidsmodule, DSP).
+     * MCU-data (McuDataAnalysisManager) en GPIO (FlyaudioGpioJNI) blijven bewaard.
+     */
+    private static final String[] NOISE = {
+            " gps_zkw ",
+            "FAKE_PACKAGE_SIGNATURE",
+            " SoundEffect:",
+            "GooglePlayServicesUtil",
+            "DspManagerPointcut",
+            " DspManager:",
+            " DspClient:",
+            "aictlog-ShellUtils",
+            "FansHelper.sendCpuTemp",
+            "[Gralloc]",
+    };
+
+    static boolean isNoise(String line) {
+        for (String n : NOISE) {
+            if (line.contains(n)) return true;
+        }
+        return false;
+    }
+
     private static void write(String line) {
+        if (isNoise(line)) return;
         synchronized (LOCK) {
             try {
                 String day = DAY.format(new Date());
