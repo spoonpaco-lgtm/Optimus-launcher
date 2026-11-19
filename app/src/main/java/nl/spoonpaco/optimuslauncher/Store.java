@@ -37,6 +37,9 @@ public class Store {
     // ---- tank ----
 
     public float tankLiters() { return p.getFloat("tank", -1f); }
+    public float kmSinceFull() { return p.getFloat("kmSinceFull", 0f); }
+    public float estSinceFull() { return p.getFloat("estSinceFull", 0f); }
+    public float addedSinceFull() { return p.getFloat("addedSinceFull", 0f); }
     public float price() { return p.getFloat("price", -1f); }
 
     /** Geschatte resterende km, of -1 als de tank onbekend is. */

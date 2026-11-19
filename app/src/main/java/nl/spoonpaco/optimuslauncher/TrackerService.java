@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.location.GnssStatus;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -24,6 +25,69 @@ public class TrackerService extends Service implements LocationListener {
     public static volatile long lastFixTime = 0L;
     /** false als de tablet geen GPS-provider heeft. */
     public static volatile boolean gpsPresent = true;
+
+    // GPS-diagnose voor het debugscherm
+    public static volatile int satsVisible = 0;
+    public static volatile int satsUsed = 0;
+    public static volatile int satsWithSignal = 0;
+    public static volatile float bestSnr = 0f;
+    public static volatile String satDetail = "";
+    public static volatile long satUpdateTime = 0L;
+    public static volatile long firstFixMs = -1L;
+    public static volatile float lastAccuracy = -1f;
+    public static volatile long serviceStart = 0L;
+
+    private long lastSatNote = 0L;
+
+    private final GnssStatus.Callback gnssCb = new GnssStatus.Callback() {
+        @Override public void onFirstFix(int ttffMillis) {
+            firstFixMs = ttffMillis;
+            CarLogger.note("gps eerste positie na " + (ttffMillis / 1000) + " s");
+        }
+        @Override public void onSatelliteStatusChanged(GnssStatus s) {
+            int n = s.getSatelliteCount();
+            int used = 0, withSig = 0;
+            float best = 0f;
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < n; i++) {
+                float cn0 = s.getCn0DbHz(i);
+                if (s.usedInFix(i)) used++;
+                if (cn0 > 0f) withSig++;
+                if (cn0 > best) best = cn0;
+                if (i < 24) {
+                    sb.append(constellation(s.getConstellationType(i)))
+                      .append(s.getSvid(i)).append(':')
+                      .append(Math.round(cn0))
+                      .append(s.usedInFix(i) ? "* " : "  ");
+                }
+            }
+            satsVisible = n;
+            satsUsed = used;
+            satsWithSignal = withSig;
+            bestSnr = best;
+            satDetail = sb.toString().trim();
+            long now = System.currentTimeMillis();
+            satUpdateTime = now;
+            if (now - lastSatNote >= 30000) {
+                lastSatNote = now;
+                CarLogger.note(String.format(java.util.Locale.US,
+                        "gps sats zicht=%d signaal=%d gebruikt=%d best=%.0f dBHz | %s",
+                        n, withSig, used, best, satDetail));
+            }
+        }
+    };
+
+    private static String constellation(int t) {
+        switch (t) {
+            case GnssStatus.CONSTELLATION_GPS: return "G";
+            case GnssStatus.CONSTELLATION_GLONASS: return "R";
+            case GnssStatus.CONSTELLATION_BEIDOU: return "B";
+            case GnssStatus.CONSTELLATION_GALILEO: return "E";
+            case GnssStatus.CONSTELLATION_QZSS: return "J";
+            case GnssStatus.CONSTELLATION_SBAS: return "S";
+            default: return "?";
+        }
+    }
 
     private static final String CHANNEL = "rit";
     private static final float MOVING_KMH = 3f;
@@ -57,8 +121,10 @@ public class TrackerService extends Service implements LocationListener {
             gpsPresent = false;
             return;
         }
+        serviceStart = System.currentTimeMillis();
         try {
             lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, this);
+            lm.registerGnssStatusCallback(gnssCb);
         } catch (SecurityException e) {
             stopSelf();
         }
@@ -74,6 +140,7 @@ public class TrackerService extends Service implements LocationListener {
         CarLogger.stop();
         if (lm != null) {
             try { lm.removeUpdates(this); } catch (Exception ignored) { }
+            try { lm.unregisterGnssStatusCallback(gnssCb); } catch (Exception ignored) { }
         }
         super.onDestroy();
     }
@@ -87,6 +154,7 @@ public class TrackerService extends Service implements LocationListener {
         lastFixTime = now;
         float kmh = loc.hasSpeed() ? loc.getSpeed() * 3.6f : 0f;
         speedKmh = kmh;
+        lastAccuracy = loc.hasAccuracy() ? loc.getAccuracy() : -1f;
 
         if (now - lastGpsNote >= 5000) {
             lastGpsNote = now;

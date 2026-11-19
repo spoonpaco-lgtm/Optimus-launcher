@@ -27,6 +27,7 @@
     </queries>
 
     <application
+        android:name=".OptimusApp"
         android:allowBackup="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -46,6 +47,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".DebugActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|uiMode" />
 
         <service
             android:name=".TrackerService"

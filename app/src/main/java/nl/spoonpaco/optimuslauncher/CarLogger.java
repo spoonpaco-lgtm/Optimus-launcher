@@ -16,25 +16,36 @@ import java.util.Locale;
 
 /**
  * Autolog: schrijft alles wat binnenkomt in het Android-systeemlogboek
- * (waar de MCU/CAN-signalen van FlyAudio terechtkomen) naar een bestand per dag,
- * aangevuld met de eigen GPS-snelheid om signalen te kunnen vergelijken.
+ * (waar de FlyAudio MCU/CAN-signalen terechtkomen) naar bestanden per dag,
+ * aangevuld met de eigen GPS-snelheid. Ruis wordt weggefilterd.
  *
  * Bestanden: /sdcard/Android/data/nl.spoonpaco.optimuslauncher/files/carlog/
- * Vereist READ_LOGS, eenmalig te geven met:
- *   adb shell pm grant nl.spoonpaco.optimuslauncher android.permission.READ_LOGS
+ *   carlog-JJJJ-MM-DD.txt, bij vol of handmatig: carlog-JJJJ-MM-DD-2.txt enz.
+ * Vereist READ_LOGS (eenmalig via adb pm grant).
  */
 public class CarLogger {
 
     /** 0 = uit, 1 = alleen GPS (geen READ_LOGS), 2 = volledig. */
     public static volatile int state = 0;
 
-    private static final long MAX_BYTES_PER_DAY = 40L * 1024 * 1024;
+    // Statistieken voor het debugscherm
+    public static volatile long linesWritten = 0;
+    public static volatile long linesNoise = 0;
+    public static volatile String lastMcu = null;
+    public static volatile long lastMcuTime = 0;
+    public static volatile String currentFile = "-";
+    public static volatile long currentBytes = 0;
+    public static volatile boolean full = false;
+
+    private static final long MAX_BYTES_PER_PART = 40L * 1024 * 1024;
+    private static final int MAX_PARTS_PER_DAY = 4;
     private static final int KEEP_DAYS = 7;
     private static final Object LOCK = new Object();
 
     private static File dir;
     private static BufferedWriter out;
     private static String outDay = "";
+    private static int outPart = 1;
     private static long outBytes = 0;
     private static long lastFlush = 0;
     private static Process proc;
@@ -42,6 +53,32 @@ public class CarLogger {
 
     private static final SimpleDateFormat DAY = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
     private static final SimpleDateFormat TS = new SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US);
+
+    /**
+     * Ruis zonder autodata die het logboek in minuten volspamt.
+     * MCU-data (McuDataAnalysisManager) en GPIO (FlyaudioGpioJNI) blijven bewaard.
+     */
+    private static final String[] NOISE = {
+            " gps_zkw ",
+            "FAKE_PACKAGE_SIGNATURE",
+            " SoundEffect:",
+            "GooglePlayServicesUtil",
+            "DspManagerPointcut",
+            " DspManager:",
+            " DspClient:",
+            "aictlog-ShellUtils",
+            "FansHelper.sendCpuTemp",
+            "[Gralloc]",
+    };
+
+    static boolean isNoise(String line) {
+        for (String n : NOISE) {
+            if (line.contains(n)) return true;
+        }
+        return false;
+    }
+
+    public static File dir() { return dir; }
 
     public static void start(Context c) {
         synchronized (LOCK) {
@@ -76,9 +113,24 @@ public class CarLogger {
         }
     }
 
+    /** Handmatig een nieuw deel beginnen (ook als het huidige vol zit). */
+    public static void newPart() {
+        synchronized (LOCK) {
+            closeOut();
+            String today = DAY.format(new Date());
+            if (!today.equals(outDay)) {
+                outDay = today;
+                outPart = firstNonFull(today);
+            }
+            outPart = Math.min(outPart + 1, MAX_PARTS_PER_DAY);
+            full = false;
+        }
+        note("=== nieuw logdeel handmatig gestart ===");
+    }
+
     /** Eigen regel toevoegen (bijv. GPS-snelheid). */
     public static void note(String msg) {
-        write(TS.format(new Date()) + "  [optimus] " + msg);
+        writeRaw(TS.format(new Date()) + "  [optimus] " + msg);
     }
 
     private static void readLoop() {
@@ -97,15 +149,20 @@ public class CarLogger {
                 BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()), 16384);
                 String line;
                 while ((line = br.readLine()) != null) {
-                    write(line);
+                    if (isNoise(line)) { linesNoise++; continue; }
+                    if (line.contains("McuDataAnalysisManager") && line.contains("getDataFrom")) {
+                        lastMcu = line;
+                        lastMcuTime = System.currentTimeMillis();
+                    }
+                    writeRaw(line);
                 }
             } catch (Exception e) {
                 note("logcat fout: " + e.getMessage());
             }
             if (System.currentTimeMillis() - started > 60_000) {
-                quickFails = 0;           // liep goed, gewoon herstarten
+                quickFails = 0;
             } else if (variant < commands.length - 1) {
-                variant++;                // snel gestopt: probeer zonder kernel-buffer
+                variant++;
                 note("logcat-variant " + variant + " wordt geprobeerd");
             } else if (++quickFails >= 3) {
                 state = 1;
@@ -116,47 +173,52 @@ public class CarLogger {
         }
     }
 
-    /**
-     * Ruis die geen autodata bevat en het logboek in minuten volspamt
-     * (gemeten op de tablet: GPS-driver, nep-handtekening, geluidsmodule, DSP).
-     * MCU-data (McuDataAnalysisManager) en GPIO (FlyaudioGpioJNI) blijven bewaard.
-     */
-    private static final String[] NOISE = {
-            " gps_zkw ",
-            "FAKE_PACKAGE_SIGNATURE",
-            " SoundEffect:",
-            "GooglePlayServicesUtil",
-            "DspManagerPointcut",
-            " DspManager:",
-            " DspClient:",
-            "aictlog-ShellUtils",
-            "FansHelper.sendCpuTemp",
-            "[Gralloc]",
-    };
-
-    static boolean isNoise(String line) {
-        for (String n : NOISE) {
-            if (line.contains(n)) return true;
-        }
-        return false;
+    private static File partFile(String day, int part) {
+        return new File(dir, part <= 1 ? "carlog-" + day + ".txt" : "carlog-" + day + "-" + part + ".txt");
     }
 
-    private static void write(String line) {
-        if (isNoise(line)) return;
+    /** Eerste deel van die dag dat nog niet vol is. */
+    private static int firstNonFull(String day) {
+        int p = 1;
+        while (p < MAX_PARTS_PER_DAY && partFile(day, p).length() >= MAX_BYTES_PER_PART) p++;
+        return p;
+    }
+
+    private static void writeRaw(String line) {
         synchronized (LOCK) {
+            if (dir == null) return;
             try {
                 String day = DAY.format(new Date());
                 if (!day.equals(outDay) || out == null) {
                     closeOut();
-                    File f = new File(dir, "carlog-" + day + ".txt");
+                    if (!day.equals(outDay)) {
+                        outDay = day;
+                        outPart = firstNonFull(day);
+                        full = false;
+                    }
+                    File f = partFile(day, outPart);
                     outBytes = f.length();
                     out = new BufferedWriter(new FileWriter(f, true), 32768);
-                    outDay = day;
+                    currentFile = f.getName();
                 }
-                if (outBytes > MAX_BYTES_PER_DAY) return;
+                if (outBytes >= MAX_BYTES_PER_PART) {
+                    if (outPart < MAX_PARTS_PER_DAY) {
+                        closeOut();
+                        outPart++;
+                        File f = partFile(day, outPart);
+                        outBytes = f.length();
+                        out = new BufferedWriter(new FileWriter(f, true), 32768);
+                        currentFile = f.getName();
+                    } else {
+                        full = true;
+                        return;
+                    }
+                }
                 out.write(line);
                 out.write('\n');
                 outBytes += line.length() + 1;
+                currentBytes = outBytes;
+                linesWritten++;
                 long now = System.currentTimeMillis();
                 if (now - lastFlush > 2000) {
                     out.flush();

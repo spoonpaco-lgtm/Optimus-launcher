@@ -92,6 +92,12 @@ public class MainActivity extends Activity {
         wireApp(R.id.btn_radio, PKG_RADIO, getString(R.string.radio));
         wireApp(R.id.st_flits, PKG_FLITS, "Flitsmeister");
 
+        // Verborgen debugscherm: klok lang ingedrukt houden
+        clock.setOnLongClickListener(v -> {
+            startActivity(new Intent(this, DebugActivity.class));
+            return true;
+        });
+
         findViewById(R.id.btn_apps).setOnClickListener(v -> showApps());
         findViewById(R.id.btn_fuel).setOnClickListener(v -> showFuelDialog());
         stTank.setOnClickListener(v -> showFuelDialog());
