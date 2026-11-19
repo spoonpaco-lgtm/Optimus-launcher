@@ -201,8 +201,7 @@ public class MainActivity extends Activity {
         // GPS
         boolean perm = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
-        if (PhoneGps.fresh()) setStatus(stGps, R.color.ok, "● GPS (telefoon)");
-        else if (!TrackerService.gpsPresent) setStatus(stGps, R.color.bad, "● Geen GPS");
+        if (!TrackerService.gpsPresent) setStatus(stGps, R.color.bad, "● Geen GPS");
         else if (!perm) setStatus(stGps, R.color.bad, "● GPS (geen toestemming)");
         else if (gpsFresh) setStatus(stGps, R.color.ok, "● GPS");
         else setStatus(stGps, R.color.warn, "● GPS zoekt");

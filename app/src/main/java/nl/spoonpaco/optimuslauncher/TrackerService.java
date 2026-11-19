@@ -116,9 +116,6 @@ public class TrackerService extends Service implements LocationListener {
 
         CarLogger.start(this);
 
-        // GPS + tijd van de telefoon (Optimus Link) via Bluetooth/wifi
-        PhoneGps.start(loc -> handleLocation(loc, true));
-
         // Zwevend snelheidsvenster over Android Auto e.d.
         ui.post(overlayTick);
 
@@ -156,18 +153,13 @@ public class TrackerService extends Service implements LocationListener {
     @Override
     public IBinder onBind(Intent intent) { return null; }
 
-    /** Positie van de eigen GPS van de tablet. Telefoon-GPS heeft voorrang als die vers is. */
     @Override
     public void onLocationChanged(Location loc) {
-        if (PhoneGps.fresh()) return;
-        handleLocation(loc, false);
+        Clock.fromGps(loc.getTime());
+        handleLocation(loc);
     }
 
-    /** Telefoon of tablet: waar de positie vandaan kwam. */
-    public static volatile boolean fromPhone = false;
-
-    private synchronized void handleLocation(Location loc, boolean phone) {
-        fromPhone = phone;
+    private synchronized void handleLocation(Location loc) {
         long now = System.currentTimeMillis();
         lastFixTime = now;
         float kmh = loc.hasSpeed() ? loc.getSpeed() * 3.6f : 0f;
@@ -177,8 +169,7 @@ public class TrackerService extends Service implements LocationListener {
         if (now - lastGpsNote >= 5000) {
             lastGpsNote = now;
             CarLogger.note(String.format(java.util.Locale.US,
-                    "gps(%s) kmh=%.1f acc=%.0f lat=%.5f lon=%.5f",
-                    phone ? "telefoon/" + PhoneGps.via : "tablet",
+                    "gps kmh=%.1f acc=%.0f lat=%.5f lon=%.5f",
                     kmh, loc.hasAccuracy() ? loc.getAccuracy() : -1f,
                     loc.getLatitude(), loc.getLongitude()));
         }

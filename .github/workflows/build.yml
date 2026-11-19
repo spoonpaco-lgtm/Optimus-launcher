@@ -54,7 +54,6 @@ jobs:
       - name: Name APKs
         run: |
           cp app/build/outputs/apk/release/app-release.apk "optimus-launcher-${{ steps.ver.outputs.version }}.apk"
-          cp link/build/outputs/apk/release/link-release.apk "optimus-link.apk"
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
@@ -62,7 +61,6 @@ jobs:
           name: optimus
           path: |
             optimus-launcher-${{ steps.ver.outputs.version }}.apk
-            optimus-link.apk
           if-no-files-found: error
 
       - name: Publish release
@@ -72,5 +70,4 @@ jobs:
           name: Optimus Launcher ${{ steps.ver.outputs.version }}
           files: |
             optimus-launcher-${{ steps.ver.outputs.version }}.apk
-            optimus-link.apk
           make_latest: true
