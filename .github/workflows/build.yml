@@ -30,22 +30,36 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      - name: Restore signing key
+        env:
+          KS_B64: ${{ secrets.OPTIMUS_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/optimus.p12"
+            echo "OPTIMUS_KEYSTORE=$RUNNER_TEMP/optimus.p12" >> "$GITHUB_ENV"
+            echo "Vaste sleutel gevonden"
+          else
+            echo "::warning::Geen vaste sleutel: APK wordt met debug-sleutel ondertekend (zelf-update werkt dan niet tussen builds)"
+          fi
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: optimus-launcher-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+      - name: Build release APK
+        env:
+          OPTIMUS_KEYSTORE_PASSWORD: ${{ secrets.OPTIMUS_KEYSTORE_PASSWORD }}
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Read version
         id: ver
         run: echo "version=$(grep -oP 'versionName "\K[^"]+' app/build.gradle)" >> "$GITHUB_OUTPUT"
 
       - name: Name APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk "optimus-launcher-${{ steps.ver.outputs.version }}.apk"
+        run: cp app/build/outputs/apk/release/app-release.apk "optimus-launcher-${{ steps.ver.outputs.version }}.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: optimus-launcher
+          path: optimus-launcher-${{ steps.ver.outputs.version }}.apk
+          if-no-files-found: error
 
       - name: Publish release
         uses: softprops/action-gh-release@v2

@@ -6,5 +6,7 @@
     <string name="phone">Telefoon</string>
     <string name="radio">Radio</string>
     <string name="apps">Apps</string>
+    <string name="fuel">Tanken</string>
     <string name="settings">Instellingen</string>
+    <string name="update">Update</string>
 </resources>

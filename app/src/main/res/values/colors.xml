@@ -4,4 +4,8 @@
     <color name="tile">#1C1F26</color>
     <color name="fg">#ECEFF4</color>
     <color name="fg_dim">#8A90A0</color>
+    <color name="ok">#4CC38A</color>
+    <color name="warn">#E5A84B</color>
+    <color name="bad">#E5534B</color>
+    <color name="off">#4A4F5C</color>
 </resources>
