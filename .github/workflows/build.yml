@@ -51,14 +51,18 @@ jobs:
         id: ver
         run: echo "version=$(grep -oP 'versionName "\K[^"]+' app/build.gradle)" >> "$GITHUB_OUTPUT"
 
-      - name: Name APK
-        run: cp app/build/outputs/apk/release/app-release.apk "optimus-launcher-${{ steps.ver.outputs.version }}.apk"
+      - name: Name APKs
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "optimus-launcher-${{ steps.ver.outputs.version }}.apk"
+          cp link/build/outputs/apk/release/link-release.apk "optimus-link.apk"
 
-      - name: Upload APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: optimus-launcher
-          path: optimus-launcher-${{ steps.ver.outputs.version }}.apk
+          name: optimus
+          path: |
+            optimus-launcher-${{ steps.ver.outputs.version }}.apk
+            optimus-link.apk
           if-no-files-found: error
 
       - name: Publish release
@@ -66,5 +70,7 @@ jobs:
         with:
           tag_name: v${{ steps.ver.outputs.version }}
           name: Optimus Launcher ${{ steps.ver.outputs.version }}
-          files: optimus-launcher-${{ steps.ver.outputs.version }}.apk
+          files: |
+            optimus-launcher-${{ steps.ver.outputs.version }}.apk
+            optimus-link.apk
           make_latest: true

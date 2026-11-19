@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+}
+
+def keystorePath = System.getenv("OPTIMUS_KEYSTORE")
+def keystorePassword = System.getenv("OPTIMUS_KEYSTORE_PASSWORD")
+def hasFixedKey = keystorePath != null && !keystorePath.isEmpty() && file(keystorePath).exists()
+
+android {
+    namespace 'nl.spoonpaco.optimuslink'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "nl.spoonpaco.optimuslink"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    signingConfigs {
+        if (hasFixedKey) {
+            optimus {
+                storeFile file(keystorePath)
+                storeType "pkcs12"
+                storePassword keystorePassword
+                keyAlias "optimus"
+                keyPassword keystorePassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig hasFixedKey ? signingConfigs.optimus : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}

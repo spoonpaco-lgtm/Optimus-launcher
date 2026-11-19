@@ -117,7 +117,7 @@ public class CarLogger {
     public static void newPart() {
         synchronized (LOCK) {
             closeOut();
-            String today = DAY.format(new Date());
+            String today = DAY.format(new Date(Clock.now()));
             if (!today.equals(outDay)) {
                 outDay = today;
                 outPart = firstNonFull(today);
@@ -130,7 +130,7 @@ public class CarLogger {
 
     /** Eigen regel toevoegen (bijv. GPS-snelheid). */
     public static void note(String msg) {
-        writeRaw(TS.format(new Date()) + "  [optimus] " + msg);
+        writeRaw(TS.format(new Date(Clock.now())) + "  [optimus] " + msg);
     }
 
     private static void readLoop() {
@@ -188,7 +188,7 @@ public class CarLogger {
         synchronized (LOCK) {
             if (dir == null) return;
             try {
-                String day = DAY.format(new Date());
+                String day = DAY.format(new Date(Clock.now()));
                 if (!day.equals(outDay) || out == null) {
                     closeOut();
                     if (!day.equals(outDay)) {

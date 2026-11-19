@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Autolog: eenmalig geven met adb shell pm grant ... android.permission.READ_LOGS -->
     <uses-permission android:name="android.permission.READ_LOGS"
         xmlns:tools="http://schemas.android.com/tools"

@@ -124,7 +124,21 @@ public class DebugActivity extends Activity {
         s.append("eerste positie (TTFF): ")
                 .append(TrackerService.firstFixMs >= 0 ? (TrackerService.firstFixMs / 1000) + " s" : "nog niet")
                 .append("   GPS loopt al ").append(age(now, TrackerService.serviceStart)).append('\n');
-        s.append(String.format(L, "snelheid: %.1f km/u\n\n", Math.max(0f, TrackerService.speedKmh)));
+        s.append(String.format(L, "snelheid: %.1f km/u  (bron: %s)\n\n", Math.max(0f, TrackerService.speedKmh),
+                TrackerService.fromPhone ? "telefoon" : "tablet"));
+
+        // ---- Telefoon (Optimus Link) ----
+        s.append("== Telefoon-GPS (Optimus Link) ==\n");
+        s.append("laatste bericht: ").append(age(now, PhoneGps.lastMsg))
+                .append("  via ").append(PhoneGps.via)
+                .append("  totaal ").append(PhoneGps.messages).append('\n');
+        s.append("bluetooth: ").append(PhoneGps.btClient ? "telefoon verbonden"
+                : PhoneGps.btWaiting ? "wacht op telefoon" : "uit").append('\n');
+        s.append("tijd: ").append(Clock.corrected
+                ? String.format(L, "gecorrigeerd met telefoon (%+d s)", Clock.offsetMs / 1000)
+                : "geen correctie").append('\n');
+        if (!PhoneGps.lastError.isEmpty()) s.append("melding: ").append(PhoneGps.lastError).append('\n');
+        s.append('\n');
 
         // ---- Netwerk / ADB ----
         s.append("== Netwerk / ADB ==\n");

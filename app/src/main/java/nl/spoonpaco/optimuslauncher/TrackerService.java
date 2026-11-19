@@ -116,6 +116,12 @@ public class TrackerService extends Service implements LocationListener {
 
         CarLogger.start(this);
 
+        // GPS + tijd van de telefoon (Optimus Link) via Bluetooth/wifi
+        PhoneGps.start(loc -> handleLocation(loc, true));
+
+        // Zwevend snelheidsvenster over Android Auto e.d.
+        ui.post(overlayTick);
+
         lm =(LocationManager) getSystemService(Context.LOCATION_SERVICE);
         if (lm == null || lm.getProvider(LocationManager.GPS_PROVIDER) == null) {
             gpsPresent = false;
@@ -137,6 +143,8 @@ public class TrackerService extends Service implements LocationListener {
 
     @Override
     public void onDestroy() {
+        ui.removeCallbacks(overlayTick);
+        removeBubble();
         CarLogger.stop();
         if (lm != null) {
             try { lm.removeUpdates(this); } catch (Exception ignored) { }
@@ -148,8 +156,18 @@ public class TrackerService extends Service implements LocationListener {
     @Override
     public IBinder onBind(Intent intent) { return null; }
 
+    /** Positie van de eigen GPS van de tablet. Telefoon-GPS heeft voorrang als die vers is. */
     @Override
     public void onLocationChanged(Location loc) {
+        if (PhoneGps.fresh()) return;
+        handleLocation(loc, false);
+    }
+
+    /** Telefoon of tablet: waar de positie vandaan kwam. */
+    public static volatile boolean fromPhone = false;
+
+    private synchronized void handleLocation(Location loc, boolean phone) {
+        fromPhone = phone;
         long now = System.currentTimeMillis();
         lastFixTime = now;
         float kmh = loc.hasSpeed() ? loc.getSpeed() * 3.6f : 0f;
@@ -159,7 +177,8 @@ public class TrackerService extends Service implements LocationListener {
         if (now - lastGpsNote >= 5000) {
             lastGpsNote = now;
             CarLogger.note(String.format(java.util.Locale.US,
-                    "gps kmh=%.1f acc=%.0f lat=%.5f lon=%.5f",
+                    "gps(%s) kmh=%.1f acc=%.0f lat=%.5f lon=%.5f",
+                    phone ? "telefoon/" + PhoneGps.via : "tablet",
                     kmh, loc.hasAccuracy() ? loc.getAccuracy() : -1f,
                     loc.getLatitude(), loc.getLongitude()));
         }
@@ -184,6 +203,92 @@ public class TrackerService extends Service implements LocationListener {
             }
         }
         last = loc;
+    }
+
+    // ---------- zwevend snelheidsvenster ----------
+
+    private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+    private android.view.WindowManager wm;
+    private android.widget.TextView bubble;
+    private android.view.WindowManager.LayoutParams bp;
+
+    private final Runnable overlayTick = new Runnable() {
+        @Override public void run() {
+            try { updateOverlay(); } catch (Exception ignored) { }
+            ui.postDelayed(this, 1000);
+        }
+    };
+
+    private void updateOverlay() {
+        boolean want = android.provider.Settings.canDrawOverlays(this)
+                && !MainActivity.visible
+                && store.overlayEnabled();
+        if (!want) { removeBubble(); return; }
+        if (bubble == null) addBubble();
+        boolean fresh = System.currentTimeMillis() - lastFixTime < 3000 && speedKmh >= 0;
+        bubble.setText(fresh ? Math.round(speedKmh) + " km/u" : "-- km/u");
+        bubble.setTextColor(getColor(fresh ? R.color.fg : R.color.fg_dim));
+    }
+
+    private void addBubble() {
+        wm = (android.view.WindowManager) getSystemService(Context.WINDOW_SERVICE);
+        float d = getResources().getDisplayMetrics().density;
+        bubble = new android.widget.TextView(this);
+        bubble.setTextSize(22);
+        bubble.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        int p = (int) (10 * d);
+        bubble.setPadding(p * 2, p, p * 2, p);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(0xCC0E0F12);
+        bg.setCornerRadius(14 * d);
+        bubble.setBackground(bg);
+
+        bp = new android.view.WindowManager.LayoutParams(
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                android.graphics.PixelFormat.TRANSLUCENT);
+        bp.gravity = android.view.Gravity.TOP | android.view.Gravity.START;
+        bp.x = store.overlayX();
+        bp.y = store.overlayY();
+
+        bubble.setOnTouchListener(new android.view.View.OnTouchListener() {
+            float downX, downY; int startX, startY; boolean moved;
+            @Override public boolean onTouch(android.view.View v, android.view.MotionEvent e) {
+                switch (e.getAction()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        downX = e.getRawX(); downY = e.getRawY();
+                        startX = bp.x; startY = bp.y; moved = false;
+                        return true;
+                    case android.view.MotionEvent.ACTION_MOVE:
+                        int dx = (int) (e.getRawX() - downX), dy = (int) (e.getRawY() - downY);
+                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) moved = true;
+                        bp.x = startX + dx; bp.y = startY + dy;
+                        try { wm.updateViewLayout(bubble, bp); } catch (Exception ignored) { }
+                        return true;
+                    case android.view.MotionEvent.ACTION_UP:
+                        if (moved) {
+                            store.setOverlayPos(bp.x, bp.y);
+                        } else {
+                            Intent i = new Intent(TrackerService.this, MainActivity.class);
+                            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(i);
+                        }
+                        return true;
+                }
+                return false;
+            }
+        });
+        try { wm.addView(bubble, bp); } catch (Exception e) { bubble = null; }
+    }
+
+    private void removeBubble() {
+        if (bubble != null && wm != null) {
+            try { wm.removeView(bubble); } catch (Exception ignored) { }
+        }
+        bubble = null;
     }
 
     @Override public void onStatusChanged(String provider, int status, Bundle extras) { }

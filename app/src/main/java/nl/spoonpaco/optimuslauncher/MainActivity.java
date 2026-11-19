@@ -87,7 +87,14 @@ public class MainActivity extends Activity {
         stTank = findViewById(R.id.st_tank);
 
         wireApp(R.id.btn_nav, PKG_MAPS, getString(R.string.nav));
-        wireApp(R.id.btn_music, PKG_SPOTIFY, getString(R.string.music));
+        // Muziek: Spotify op de tablet als die er is, anders Bluetooth-muziek van de telefoon
+        findViewById(R.id.btn_music).setOnClickListener(v -> {
+            if (getPackageManager().getLaunchIntentForPackage(PKG_SPOTIFY) != null) launch(PKG_SPOTIFY, "Spotify");
+            else launch("com.flyaudio.btmusic", "Bluetooth-muziek");
+        });
+
+        // Tik op de snelheid: zwevend snelheidsvenster aan/uit (boven Android Auto)
+        speed.setOnClickListener(v -> toggleOverlay());
         wireApp(R.id.btn_phone, PKG_PHONE, getString(R.string.phone));
         wireApp(R.id.btn_radio, PKG_RADIO, getString(R.string.radio));
         wireApp(R.id.st_flits, PKG_FLITS, "Flitsmeister");
@@ -154,8 +161,26 @@ public class MainActivity extends Activity {
 
     // ---------- scherm verversen ----------
 
+    private void toggleOverlay() {
+        if (!Settings.canDrawOverlays(this)) {
+            toast("Zet 'Weergeven over andere apps' aan voor Optimus Launcher");
+            try {
+                Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:" + getPackageName()));
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(i);
+            } catch (Exception e) {
+                toast("Instelling niet gevonden");
+            }
+            return;
+        }
+        boolean on = !store.overlayEnabled();
+        store.setOverlayEnabled(on);
+        toast(on ? "Zwevende snelheid aan (verschijnt buiten de launcher)" : "Zwevende snelheid uit");
+    }
+
     private void refresh() {
-        Date now = new Date();
+        Date now = new Date(Clock.now());
         clock.setText(timeFmt.format(now));
         date.setText(capitalize(dateFmt.format(now)));
 
@@ -176,7 +201,8 @@ public class MainActivity extends Activity {
         // GPS
         boolean perm = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
-        if (!TrackerService.gpsPresent) setStatus(stGps, R.color.bad, "● Geen GPS");
+        if (PhoneGps.fresh()) setStatus(stGps, R.color.ok, "● GPS (telefoon)");
+        else if (!TrackerService.gpsPresent) setStatus(stGps, R.color.bad, "● Geen GPS");
         else if (!perm) setStatus(stGps, R.color.bad, "● GPS (geen toestemming)");
         else if (gpsFresh) setStatus(stGps, R.color.ok, "● GPS");
         else setStatus(stGps, R.color.warn, "● GPS zoekt");
@@ -369,14 +395,19 @@ public class MainActivity extends Activity {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
 
+    /** Staat de launcher op het scherm? (dan geen zwevend venster nodig) */
+    public static volatile boolean visible = false;
+
     @Override protected void onResume() {
         super.onResume();
+        visible = true;
         handler.removeCallbacks(tick);
         handler.post(tick);
     }
 
     @Override protected void onPause() {
         super.onPause();
+        visible = false;
         handler.removeCallbacks(tick);
     }
 

@@ -50,7 +50,8 @@ public class Updater {
                     JSONArray assets = rel.optJSONArray("assets");
                     for (int i = 0; assets != null && i < assets.length(); i++) {
                         JSONObject as = assets.getJSONObject(i);
-                        if (as.optString("name").endsWith(".apk")) {
+                        String nm = as.optString("name");
+                        if (nm.startsWith("optimus-launcher") && nm.endsWith(".apk")) {
                             apkUrl = as.optString("browser_download_url");
                             break;
                         }
