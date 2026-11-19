@@ -91,6 +91,8 @@ public class TrackerService extends Service implements LocationListener {
 
     private static final String CHANNEL = "rit";
     private static final float MOVING_KMH = 3f;
+    /** Gewicht auto + bestuurder (kg) voor optrek-verbruik. */
+    private static final float CAR_KG = 1600f;
     private static final float MAX_ACCURACY_M = 35f;
 
     private LocationManager lm;
@@ -217,6 +219,24 @@ public class TrackerService extends Service implements LocationListener {
         }
 
         if (!loc.hasAccuracy() || loc.getAccuracy() > MAX_ACCURACY_M) return;
+
+        // Extra verbruik: stationair draaien (stilstand tijdens een rit) en optrekken
+        if (last != null) {
+            float dt = (loc.getTime() - last.getTime()) / 1000f;
+            if (dt > 0f && dt < 5f) {
+                if (kmh < MOVING_KMH) {
+                    if (!store.tripEnded()) store.addFuel(Store.IDLE_LPH * dt / 3600f);
+                } else {
+                    float v1 = last.hasSpeed() ? last.getSpeed() : 0f;
+                    float v2 = loc.getSpeed();
+                    if (v2 > v1) {
+                        // kinetische energie / (energie benzine 34,2 MJ/l x motorrendement ~25%)
+                        float joule = 0.5f * CAR_KG * (v2 * v2 - v1 * v1);
+                        store.addFuel(joule / 8.55e6f);
+                    }
+                }
+            }
+        }
 
         if (kmh >= MOVING_KMH) {
             lastMoveElapsed = android.os.SystemClock.elapsedRealtime();

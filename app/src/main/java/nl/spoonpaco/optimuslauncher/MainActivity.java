@@ -84,6 +84,12 @@ public class MainActivity extends Activity {
         stTank = findViewById(R.id.st_tank);
 
         wireApp(R.id.btn_aa, PKG_AA, "Android Auto (CarLetter)");
+
+        // Contact aan (= tablet net opgestart): na 4 s vanzelf Android Auto openen, één keer per opstart
+        if (!aaAutoStarted && android.os.SystemClock.elapsedRealtime() < 5L * 60L * 1000L && installed(PKG_AA)) {
+            aaAutoStarted = true;
+            handler.postDelayed(() -> launch(PKG_AA, "Android Auto"), 4000L);
+        }
         // Lang indrukken op Android Auto: afspelen/pauze zonder van scherm te wisselen
         findViewById(R.id.btn_aa).setOnLongClickListener(v -> {
             mediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE);
@@ -423,6 +429,8 @@ public class MainActivity extends Activity {
     private void toast(String msg) {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
+
+    private static boolean aaAutoStarted = false;
 
     /** Staat de launcher op het scherm? (dan geen zwevend venster nodig) */
     public static volatile boolean visible = false;

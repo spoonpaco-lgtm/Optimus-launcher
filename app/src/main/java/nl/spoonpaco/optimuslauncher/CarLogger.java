@@ -37,7 +37,7 @@ public class CarLogger {
     public static volatile long currentBytes = 0;
     public static volatile boolean full = false;
 
-    private static final long MAX_BYTES_PER_PART = 40L * 1024 * 1024;
+    private static final long MAX_BYTES_PER_PART = 10L * 1024 * 1024;
     private static final int MAX_PARTS_PER_DAY = 4;
     private static final int KEEP_DAYS = 7;
     private static final Object LOCK = new Object();
@@ -71,6 +71,22 @@ public class CarLogger {
             "[Gralloc]",
     };
 
+    /** Alleen-auto-modus (standaard): bewaar alleen regels met autodata. */
+    public static volatile boolean logAll = false;
+
+    private static final String[] KEEP = {
+            "mcu", "gpio", "acc-syn", "ill-chk", "parking", "back-de", "carservice",
+            "flycar", "androidruntime", "fatal exception", "bootanimation", "carletter",
+    };
+
+    static boolean isCarLine(String line) {
+        String l = line.toLowerCase(Locale.US);
+        for (String k : KEEP) {
+            if (l.contains(k)) return true;
+        }
+        return false;
+    }
+
     static boolean isNoise(String line) {
         for (String n : NOISE) {
             if (line.contains(n)) return true;
@@ -83,6 +99,7 @@ public class CarLogger {
     public static void start(Context c) {
         synchronized (LOCK) {
             if (reader != null) return;
+            logAll = c.getSharedPreferences("optimus", Context.MODE_PRIVATE).getBoolean("logAll", false);
             File base = c.getExternalFilesDir(null);
             if (base == null) base = c.getFilesDir();
             dir = new File(base, "carlog");
@@ -149,7 +166,7 @@ public class CarLogger {
                 BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()), 16384);
                 String line;
                 while ((line = br.readLine()) != null) {
-                    if (isNoise(line)) { linesNoise++; continue; }
+                    if (isNoise(line) || (!logAll && !isCarLine(line))) { linesNoise++; continue; }
                     if (line.contains("McuDataAnalysisManager") && line.contains("getDataFrom")) {
                         lastMcu = line;
                         lastMcuTime = System.currentTimeMillis();

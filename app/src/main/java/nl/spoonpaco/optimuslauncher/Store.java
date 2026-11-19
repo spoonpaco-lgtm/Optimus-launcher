@@ -23,13 +23,31 @@ public class Store {
 
     // ---- verbruik ----
 
-    /** Geschat verbruik (l/100km) bij een snelheid, met kalibratiefactor. */
+    /**
+     * Verbruik (l/100km) bij CONSTANTE snelheid, met kalibratiefactor.
+     * Stationair draaien en optrekken worden apart opgeteld (addFuel), zodat
+     * stad (veel stoppen/optrekken) vanzelf hoger uitkomt dan snelweg.
+     * ~5,5 bij 20 km/u, ~5,3 bij 50, ~6,7 bij 100, ~8,1 bij 130.
+     */
     public float litersPer100At(float kmh) {
-        float base;
-        if (kmh <= 50f) base = CITY_L100;
-        else if (kmh >= 90f) base = HIGHWAY_L100;
-        else base = CITY_L100 + (kmh - 50f) / 40f * (HIGHWAY_L100 - CITY_L100);
+        float v = Math.max(kmh, 10f);
+        float base = 4.2f + 0.00022f * v * v + 25f / v;
         return base * calFactor();
+    }
+
+    /** Stationair verbruik in l/uur. */
+    public static final float IDLE_LPH = 0.8f;
+
+    /** Extra brandstof (stationair/optrekken) bij de rit en de tank optellen; kalibratie wordt toegepast. */
+    public void addFuel(float liters) {
+        if (liters <= 0f) return;
+        liters *= calFactor();
+        SharedPreferences.Editor e = p.edit();
+        e.putFloat("tripL", tripLiters() + liters);
+        e.putFloat("estSinceFull", p.getFloat("estSinceFull", 0f) + liters);
+        float t = tankLiters();
+        if (t >= 0) e.putFloat("tank", Math.max(0f, t - liters));
+        e.apply();
     }
 
     public float calFactor() { return p.getFloat("cal", 1f); }
