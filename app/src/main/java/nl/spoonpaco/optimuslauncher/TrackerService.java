@@ -40,8 +40,11 @@ public class TrackerService extends Service implements LocationListener {
     private long lastSatNote = 0L;
 
     private final GnssStatus.Callback gnssCb = new GnssStatus.Callback() {
+        @Override public void onStarted() { PowerLog.log("GPS-motor gestart"); }
+        @Override public void onStopped() { PowerLog.log("GPS-motor gestopt"); }
         @Override public void onFirstFix(int ttffMillis) {
             firstFixMs = ttffMillis;
+            PowerLog.log("GPS eerste positie na " + (ttffMillis / 1000) + " s (sats " + satsUsed + "/" + satsVisible + ")");
             CarLogger.note("gps eerste positie na " + (ttffMillis / 1000) + " s");
         }
         @Override public void onSatelliteStatusChanged(GnssStatus s) {
@@ -117,6 +120,18 @@ public class TrackerService extends Service implements LocationListener {
         startForeground(1, n);
 
         CarLogger.start(this);
+        PowerLog.init(this);
+        PowerLog.log("dienst gestart — " + PowerLog.clocks()
+                + (android.os.SystemClock.elapsedRealtime() < 5L * 60L * 1000L ? "  => ECHTE OPSTART" : ""));
+        android.content.IntentFilter f = new android.content.IntentFilter();
+        f.addAction(Intent.ACTION_SCREEN_ON);
+        f.addAction(Intent.ACTION_SCREEN_OFF);
+        f.addAction(Intent.ACTION_POWER_CONNECTED);
+        f.addAction(Intent.ACTION_POWER_DISCONNECTED);
+        f.addAction(Intent.ACTION_SHUTDOWN);
+        f.addAction(Intent.ACTION_USER_PRESENT);
+        registerReceiver(powerRx, f);
+        lastUpDelta = android.os.SystemClock.elapsedRealtime() - android.os.SystemClock.uptimeMillis();
 
         // Zwevend snelheidsvenster over Android Auto e.d.
         ui.post(overlayTick);
@@ -151,6 +166,8 @@ public class TrackerService extends Service implements LocationListener {
     public void onDestroy() {
         ui.removeCallbacks(overlayTick);
         ui.removeCallbacks(tripTick);
+        try { unregisterReceiver(powerRx); } catch (Exception ignored) { }
+        PowerLog.log("dienst gestopt");
         removeBubble();
         CarLogger.stop();
         if (lm != null) {
@@ -165,6 +182,10 @@ public class TrackerService extends Service implements LocationListener {
 
     @Override
     public void onLocationChanged(Location loc) {
+        if (!fixSinceWake) {
+            fixSinceWake = true;
+            PowerLog.log("GPS-positie binnen, " + PowerLog.dur(android.os.SystemClock.elapsedRealtime() - wakeAt) + " na wakker worden");
+        }
         Clock.fromGps(loc.getTime());
         handleLocation(loc);
     }
@@ -176,8 +197,87 @@ public class TrackerService extends Service implements LocationListener {
     private static final long STOP_MS = 5L * 60L * 1000L;
     private volatile long lastMoveElapsed = 0L;
 
+    // ---------- aan/uit/slaap ----------
+
+    private long lastUpDelta = 0L;
+    private long screenOffAt = 0L;
+    private long wakeAt = 0L;
+    private boolean fixSinceWake = true;
+    private long lastNoFixNote = 0L;
+
+    private final android.content.BroadcastReceiver powerRx = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            String a = i.getAction();
+            if (a == null) return;
+            switch (a) {
+                case Intent.ACTION_SCREEN_OFF:
+                    screenOffAt = android.os.SystemClock.elapsedRealtime();
+                    PowerLog.log("scherm UIT — " + PowerLog.clocks());
+                    if (!store.tripEnded() && store.tripKm() >= MIN_TRIP_KM) finishTrip("scherm uit");
+                    break;
+                case Intent.ACTION_SCREEN_ON:
+                    long off = screenOffAt > 0 ? android.os.SystemClock.elapsedRealtime() - screenOffAt : -1;
+                    PowerLog.log("scherm AAN" + (off >= 0 ? " na " + PowerLog.dur(off) + " uit" : "") + " — " + PowerLog.clocks());
+                    onWake(off);
+                    break;
+                case Intent.ACTION_POWER_CONNECTED: PowerLog.log("voeding aangesloten"); break;
+                case Intent.ACTION_POWER_DISCONNECTED: PowerLog.log("voeding weg"); break;
+                case Intent.ACTION_SHUTDOWN: PowerLog.log("UITSCHAKELEN"); break;
+                case Intent.ACTION_USER_PRESENT: PowerLog.log("ontgrendeld"); break;
+            }
+        }
+    };
+
+    /** Na wakker worden: GPS opnieuw aanvragen (sommige ROMs laten hem uit) en evt. Android Auto openen. */
+    private void onWake(long offMs) {
+        wakeAt = android.os.SystemClock.elapsedRealtime();
+        fixSinceWake = false;
+        lastMoveElapsed = wakeAt;
+        restartGps("wakker");
+        if (offMs < 0 || offMs > 2L * 60L * 1000L) {
+            Intent aa = getPackageManager().getLaunchIntentForPackage("com.carletter.car");
+            if (aa != null) {
+                ui.postDelayed(() -> {
+                    try {
+                        aa.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(aa);
+                        PowerLog.log("Android Auto geopend na wakker worden");
+                    } catch (Exception e) { PowerLog.log("Android Auto openen mislukt: " + e.getMessage()); }
+                }, 4000L);
+            }
+        }
+    }
+
+    private void restartGps(String why) {
+        if (lm == null || !gpsPresent) return;
+        try {
+            lm.removeUpdates(this);
+            lm.unregisterGnssStatusCallback(gnssCb);
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, this);
+            lm.registerGnssStatusCallback(gnssCb);
+            PowerLog.log("GPS opnieuw aangevraagd (" + why + ")");
+        } catch (Exception e) {
+            PowerLog.log("GPS opnieuw aanvragen mislukt: " + e.getMessage());
+        }
+    }
+
     private final Runnable tripTick = new Runnable() {
         @Override public void run() {
+            long el = android.os.SystemClock.elapsedRealtime();
+            // Slaap ontdekken: uptime stond stil terwijl de echte tijd doorliep
+            long delta = el - android.os.SystemClock.uptimeMillis();
+            if (delta - lastUpDelta > 30_000L) {
+                PowerLog.log("tablet heeft " + PowerLog.dur(delta - lastUpDelta) + " GESLAPEN — " + PowerLog.clocks());
+                onWake(delta - lastUpDelta);
+            }
+            lastUpDelta = delta;
+            // GPS na wakker worden in de gaten houden
+            if (!fixSinceWake && el - wakeAt > 120_000L && el - lastNoFixNote > 120_000L) {
+                lastNoFixNote = el;
+                PowerLog.log("nog GEEN GPS-positie, " + PowerLog.dur(el - wakeAt) + " na wakker worden (sats "
+                        + satsUsed + "/" + satsWithSignal + "/" + satsVisible + ")");
+                if (el - wakeAt > 240_000L) restartGps("geen fix");
+            }
             long idle = android.os.SystemClock.elapsedRealtime() - lastMoveElapsed;
             if (!store.tripEnded() && store.tripKm() >= MIN_TRIP_KM && idle >= STOP_MS) finishTrip("stilstand");
             ui.postDelayed(this, 10_000L);

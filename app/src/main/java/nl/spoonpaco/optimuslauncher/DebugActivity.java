@@ -166,6 +166,9 @@ public class DebugActivity extends Activity {
         } catch (Exception e) { s.append("opslag: ?\n\n"); }
 
         // ---- Autolog ----
+        s.append("== Aan / slaap ==\n");
+        s.append(PowerLog.clocks()).append('\n');
+        s.append(PowerLog.recentText()).append('\n');
         s.append("== Autolog ==\n");
         int st = CarLogger.state;
         s.append("status: ").append(st == 2 ? "volledig" : st == 1 ? "alleen GPS (geen READ_LOGS?)" : "uit")
