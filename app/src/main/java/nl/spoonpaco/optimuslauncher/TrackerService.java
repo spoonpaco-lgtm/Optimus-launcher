@@ -119,6 +119,13 @@ public class TrackerService extends Service implements LocationListener {
         // Zwevend snelheidsvenster over Android Auto e.d.
         ui.post(overlayTick);
 
+        // Ritsamenvatting: rit van vóór de herstart afsluiten; daarna elke 10 s op stilstand controleren
+        NotificationChannel sc = new NotificationChannel(CHANNEL_SUM, "Ritsamenvatting", NotificationManager.IMPORTANCE_HIGH);
+        nm.createNotificationChannel(sc);
+        lastMoveElapsed = android.os.SystemClock.elapsedRealtime();
+        if (!store.tripEnded() && store.tripKm() >= MIN_TRIP_KM) finishTrip("herstart");
+        ui.postDelayed(tripTick, 10_000L);
+
         lm =(LocationManager) getSystemService(Context.LOCATION_SERVICE);
         if (lm == null || lm.getProvider(LocationManager.GPS_PROVIDER) == null) {
             gpsPresent = false;
@@ -141,6 +148,7 @@ public class TrackerService extends Service implements LocationListener {
     @Override
     public void onDestroy() {
         ui.removeCallbacks(overlayTick);
+        ui.removeCallbacks(tripTick);
         removeBubble();
         CarLogger.stop();
         if (lm != null) {
@@ -157,6 +165,40 @@ public class TrackerService extends Service implements LocationListener {
     public void onLocationChanged(Location loc) {
         Clock.fromGps(loc.getTime());
         handleLocation(loc);
+    }
+
+    // ---------- ritsamenvatting ----------
+
+    private static final String CHANNEL_SUM = "ritsamenvatting";
+    private static final float MIN_TRIP_KM = 0.3f;
+    private static final long STOP_MS = 5L * 60L * 1000L;
+    private volatile long lastMoveElapsed = 0L;
+
+    private final Runnable tripTick = new Runnable() {
+        @Override public void run() {
+            long idle = android.os.SystemClock.elapsedRealtime() - lastMoveElapsed;
+            if (!store.tripEnded() && store.tripKm() >= MIN_TRIP_KM && idle >= STOP_MS) finishTrip("stilstand");
+            ui.postDelayed(this, 10_000L);
+        }
+    };
+
+    private void finishTrip(String why) {
+        store.endTrip();
+        CarLogger.note("rit afgesloten (" + why + "): " + store.summaryShort());
+        try {
+            Intent open = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, 2, open,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            Notification n = new Notification.Builder(this, CHANNEL_SUM)
+                    .setContentTitle("Rit klaar")
+                    .setContentText(store.summaryShort())
+                    .setStyle(new Notification.BigTextStyle().bigText(store.summaryText()))
+                    .setSmallIcon(android.R.drawable.ic_menu_directions)
+                    .setContentIntent(pi)
+                    .setAutoCancel(true)
+                    .build();
+            ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)).notify(2, n);
+        } catch (Exception ignored) { }
     }
 
     private synchronized void handleLocation(Location loc) {
@@ -177,9 +219,9 @@ public class TrackerService extends Service implements LocationListener {
         if (!loc.hasAccuracy() || loc.getAccuracy() > MAX_ACCURACY_M) return;
 
         if (kmh >= MOVING_KMH) {
-            if (now - store.lastMoveTime() > Store.NEW_TRIP_AFTER_MS && store.tripKm() > 0f) {
-                store.startNewTrip();
-            }
+            lastMoveElapsed = android.os.SystemClock.elapsedRealtime();
+            // Vorige rit afgesloten (stilstand of herstart) -> nu begint een nieuwe
+            if (store.tripEnded()) store.startNewTrip();
             if (last != null) {
                 float km = last.distanceTo(loc) / 1000f;
                 float hours = (loc.getTime() - last.getTime()) / 3_600_000f;

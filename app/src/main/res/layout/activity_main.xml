@@ -101,15 +101,17 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:columnCount="4"
+        android:columnCount="5"
         android:rowCount="2"
         android:alignmentMode="alignBounds"
         android:useDefaultMargins="false">
 
+        <Button android:id="@+id/btn_aa" style="@style/Tile" android:text="@string/aa" />
         <Button android:id="@+id/btn_nav" style="@style/Tile" android:text="@string/nav" />
         <Button android:id="@+id/btn_music" style="@style/Tile" android:text="@string/music" />
         <Button android:id="@+id/btn_phone" style="@style/Tile" android:text="@string/phone" />
         <Button android:id="@+id/btn_radio" style="@style/Tile" android:text="@string/radio" />
+        <Button android:id="@+id/btn_eq" style="@style/Tile" android:text="@string/eq" />
         <Button android:id="@+id/btn_apps" style="@style/Tile" android:text="@string/apps" />
         <Button android:id="@+id/btn_fuel" style="@style/Tile" android:text="@string/fuel" />
         <Button android:id="@+id/btn_settings" style="@style/Tile" android:text="@string/settings" />

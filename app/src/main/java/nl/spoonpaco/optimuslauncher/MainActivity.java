@@ -44,7 +44,9 @@ import java.util.Set;
 public class MainActivity extends Activity {
 
     private static final Locale NL = new Locale("nl");
-    private static final String PKG_MAPS = "com.google.android.apps.maps";
+    private static final String PKG_NAV = "app.organicmaps";
+    /** Android Auto-ontvanger van FlyAudio */
+    private static final String PKG_AA = "com.carletter.car";
     private static final String PKG_SPOTIFY = "com.spotify.music";
     private static final String PKG_PHONE = "com.flyaudio.phone";
     private static final String PKG_RADIO = "com.flyaudio.media.radio";
@@ -86,11 +88,27 @@ public class MainActivity extends Activity {
         stLog = findViewById(R.id.st_log);
         stTank = findViewById(R.id.st_tank);
 
-        wireApp(R.id.btn_nav, PKG_MAPS, getString(R.string.nav));
-        // Muziek: Spotify op de tablet als die er is, anders Bluetooth-muziek van de telefoon
+        wireApp(R.id.btn_nav, PKG_NAV, "Organic Maps");
+        wireApp(R.id.btn_aa, PKG_AA, "Android Auto (CarLetter)");
+        // EQ: geluidsinstellingen van FlyAudio
+        findViewById(R.id.btn_eq).setOnClickListener(v -> {
+            for (String pk : new String[]{"com.flyaudio.soundeffect", "com.flyaudio.service.dsp", "com.flyaudio.settings"}) {
+                if (installed(pk)) { launch(pk, "EQ"); return; }
+            }
+            toast("Geen EQ-app gevonden");
+        });
+        // Muziek: scherm van Android Auto (Spotify draait op de telefoon);
+        // geen AA-app -> Spotify op de tablet -> Bluetooth-muziek
         findViewById(R.id.btn_music).setOnClickListener(v -> {
-            if (getPackageManager().getLaunchIntentForPackage(PKG_SPOTIFY) != null) launch(PKG_SPOTIFY, "Spotify");
+            if (installed(PKG_AA)) launch(PKG_AA, "Android Auto");
+            else if (installed(PKG_SPOTIFY)) launch(PKG_SPOTIFY, "Spotify");
             else launch("com.flyaudio.btmusic", "Bluetooth-muziek");
+        });
+        // Lang indrukken: afspelen/pauze zonder van scherm te wisselen
+        findViewById(R.id.btn_music).setOnLongClickListener(v -> {
+            mediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE);
+            toast("Afspelen / pauze");
+            return true;
         });
 
         // Tik op de snelheid: zwevend snelheidsvenster aan/uit (boven Android Auto)
@@ -190,6 +208,7 @@ public class MainActivity extends Activity {
 
         refreshStatus(fresh);
         refreshTrip();
+        maybeShowSummary();
     }
 
     private void refreshStatus(boolean gpsFresh) {
@@ -295,6 +314,36 @@ public class MainActivity extends Activity {
 
     private void wireApp(int viewId, final String pkg, final String naam) {
         findViewById(viewId).setOnClickListener(v -> launch(pkg, naam));
+    }
+
+    private boolean installed(String pkg) {
+        return getPackageManager().getLaunchIntentForPackage(pkg) != null;
+    }
+
+    private void mediaKey(int code) {
+        try {
+            android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            long t = android.os.SystemClock.uptimeMillis();
+            am.dispatchMediaKeyEvent(new android.view.KeyEvent(t, t, android.view.KeyEvent.ACTION_DOWN, code, 0));
+            am.dispatchMediaKeyEvent(new android.view.KeyEvent(t, t, android.view.KeyEvent.ACTION_UP, code, 0));
+            CarLogger.note("mediatoets " + code + " verstuurd");
+        } catch (Exception e) {
+            toast("Mediatoets mislukt: " + e.getMessage());
+        }
+    }
+
+    // ---------- ritsamenvatting ----------
+
+    private AlertDialog summaryDialog;
+
+    private void maybeShowSummary() {
+        if (!store.summaryPending() || (summaryDialog != null && summaryDialog.isShowing())) return;
+        summaryDialog = new AlertDialog.Builder(this)
+                .setTitle("Ritsamenvatting")
+                .setMessage(store.summaryText())
+                .setPositiveButton("OK", (d, w) -> store.clearSummary())
+                .setOnCancelListener(d -> store.clearSummary())
+                .show();
     }
 
     private void launch(String pkg, String naam) {

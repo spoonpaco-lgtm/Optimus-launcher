@@ -102,6 +102,52 @@ public class Store {
         return pr > 0 ? tripLiters() * pr : -1f;
     }
 
+    // ---- ritsamenvatting ----
+
+    public boolean tripEnded() { return p.getBoolean("tripEnded", true); }
+    public boolean summaryPending() { return p.getBoolean("sumPending", false); }
+    public void clearSummary() { p.edit().putBoolean("sumPending", false).apply(); }
+
+    /** Rit afsluiten: samenvatting vastleggen (rit-cijfers blijven zichtbaar tot de volgende rit). */
+    public void endTrip() {
+        float pr = price();
+        p.edit()
+            .putBoolean("tripEnded", true)
+            .putBoolean("sumPending", true)
+            .putFloat("sumKm", tripKm())
+            .putFloat("sumH", tripMovingH())
+            .putFloat("sumAvg", tripAvgKmh())
+            .putFloat("sumMax", tripMaxKmh())
+            .putFloat("sumL", tripLiters())
+            .putFloat("sumCost", pr > 0 ? tripLiters() * pr : -1f)
+            .apply();
+    }
+
+    public String summaryText() {
+        java.util.Locale nl = new java.util.Locale("nl");
+        float h = p.getFloat("sumH", 0f);
+        int min = Math.round(h * 60f);
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format(nl, "Afstand: %.1f km\n", p.getFloat("sumKm", 0f)));
+        sb.append(min >= 60 ? String.format(nl, "Rijtijd: %d u %02d min\n", min / 60, min % 60)
+                            : String.format(nl, "Rijtijd: %d min\n", min));
+        sb.append(String.format(nl, "Gemiddeld: %.0f km/u\n", p.getFloat("sumAvg", 0f)));
+        sb.append(String.format(nl, "Hoogste: %.0f km/u\n", p.getFloat("sumMax", 0f)));
+        sb.append(String.format(nl, "Verbruik: ~%.1f liter", p.getFloat("sumL", 0f)));
+        float c = p.getFloat("sumCost", -1f);
+        if (c >= 0) sb.append(String.format(nl, "\nKosten: ~€ %.2f", c));
+        else sb.append("\nKosten: voer bij Tanken een prijs in");
+        return sb.toString();
+    }
+
+    public String summaryShort() {
+        java.util.Locale nl = new java.util.Locale("nl");
+        float c = p.getFloat("sumCost", -1f);
+        return String.format(nl, "%.1f km · gem %.0f · max %.0f km/u · ~%.1f l",
+                p.getFloat("sumKm", 0f), p.getFloat("sumAvg", 0f), p.getFloat("sumMax", 0f), p.getFloat("sumL", 0f))
+                + (c >= 0 ? String.format(nl, " · € %.2f", c) : "");
+    }
+
     public void startNewTrip() {
         p.edit()
             .putFloat("lastTripKm", tripKm())
@@ -110,6 +156,7 @@ public class Store {
             .putFloat("lastTripL", tripLiters())
             .putFloat("tripKm", 0f).putFloat("tripH", 0f)
             .putFloat("tripMax", 0f).putFloat("tripL", 0f)
+            .putBoolean("tripEnded", false)
             .apply();
     }
 
