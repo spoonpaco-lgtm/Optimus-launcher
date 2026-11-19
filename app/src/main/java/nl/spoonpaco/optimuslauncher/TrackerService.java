@@ -259,8 +259,27 @@ public class TrackerService extends Service implements LocationListener {
         if (!want) { removeBubble(); return; }
         if (bubble == null) addBubble();
         boolean fresh = System.currentTimeMillis() - lastFixTime < 3000 && speedKmh >= 0;
-        bubble.setText(fresh ? Math.round(speedKmh) + " km/u" : "-- km/u");
+        String sp = fresh ? Math.round(speedKmh) + " km/u" : "-- km/u";
         bubble.setTextColor(getColor(fresh ? R.color.fg : R.color.fg_dim));
+        if (store.overlayCollapsed()) {
+            bubble.setText(sp);
+            return;
+        }
+        java.util.Locale nl = new java.util.Locale("nl");
+        String stats;
+        float km = store.tripKm();
+        if (km < 0.05f) {
+            stats = "Rit: nog niet gereden";
+        } else {
+            stats = String.format(nl, "Rit %.1f km\nGem %.0f · Max %.0f km/u\n~%.1f l", km,
+                    store.tripAvgKmh(), store.tripMaxKmh(), store.tripLiters());
+            float cost = store.tripCost();
+            if (cost >= 0) stats += String.format(nl, " · € %.2f", cost);
+        }
+        android.text.SpannableString s = new android.text.SpannableString(sp + "\n" + stats);
+        s.setSpan(new android.text.style.RelativeSizeSpan(0.6f), sp.length(), s.length(), 0);
+        s.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.NORMAL), sp.length(), s.length(), 0);
+        bubble.setText(s);
     }
 
     private void addBubble() {
@@ -288,12 +307,13 @@ public class TrackerService extends Service implements LocationListener {
         bp.y = store.overlayY();
 
         bubble.setOnTouchListener(new android.view.View.OnTouchListener() {
-            float downX, downY; int startX, startY; boolean moved;
+            float downX, downY; int startX, startY; boolean moved; long downT;
             @Override public boolean onTouch(android.view.View v, android.view.MotionEvent e) {
                 switch (e.getAction()) {
                     case android.view.MotionEvent.ACTION_DOWN:
                         downX = e.getRawX(); downY = e.getRawY();
                         startX = bp.x; startY = bp.y; moved = false;
+                        downT = android.os.SystemClock.uptimeMillis();
                         return true;
                     case android.view.MotionEvent.ACTION_MOVE:
                         int dx = (int) (e.getRawX() - downX), dy = (int) (e.getRawY() - downY);
@@ -304,7 +324,12 @@ public class TrackerService extends Service implements LocationListener {
                     case android.view.MotionEvent.ACTION_UP:
                         if (moved) {
                             store.setOverlayPos(bp.x, bp.y);
+                        } else if (android.os.SystemClock.uptimeMillis() - downT < 600) {
+                            // korte tik: in-/uitklappen
+                            store.setOverlayCollapsed(!store.overlayCollapsed());
+                            updateOverlay();
                         } else {
+                            // lang indrukken: naar de launcher
                             Intent i = new Intent(TrackerService.this, MainActivity.class);
                             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                             startActivity(i);

@@ -180,6 +180,8 @@ public class Store {
 
     public boolean overlayEnabled() { return p.getBoolean("overlay", true); }
     public void setOverlayEnabled(boolean on) { p.edit().putBoolean("overlay", on).apply(); }
+    public boolean overlayCollapsed() { return p.getBoolean("ovCollapsed", false); }
+    public void setOverlayCollapsed(boolean c) { p.edit().putBoolean("ovCollapsed", c).apply(); }
     public int overlayX() { return p.getInt("ovX", 24); }
     public int overlayY() { return p.getInt("ovY", 90); }
     public void setOverlayPos(int x, int y) { p.edit().putInt("ovX", x).putInt("ovY", y).apply(); }
