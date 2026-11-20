@@ -39,9 +39,10 @@ public final class CarSignals {
                 return false; // GPIO 62 = hartslag van de MCU, niet loggen
             }
             if (line.contains("FlyaudioGpioJNI")) return false; // dubbele interrupt-regels
-            int m = line.indexOf("handleAnalyzedData ~~~: ");
+            final String TAG = "handleAnalyzedData ~~~: ";
+            int m = line.indexOf(TAG);
             if (m >= 0) {
-                String f = line.substring(m + 25).trim();
+                String f = line.substring(m + TAG.length()).trim();
                 if (f.length() == 14 && f.startsWith("ff550400")) {
                     String key = f.substring(8, 10);
                     int v = Integer.parseInt(f.substring(10, 12), 16);
