@@ -451,22 +451,47 @@ public class MainActivity extends Activity {
         grid.setVerticalSpacing((int) (12 * d));
         grid.setHorizontalSpacing((int) (12 * d));
         grid.setPadding((int) (16 * d), (int) (16 * d), (int) (16 * d), (int) (16 * d));
-        grid.setBackgroundColor(getColor(R.color.bg));
+        grid.setBackgroundColor(0xFF040405);
         final AlertDialog[] dlg = new AlertDialog[1];
         grid.setAdapter(new android.widget.BaseAdapter() {
             @Override public int getCount() { return pkgs.size(); }
             @Override public Object getItem(int i) { return pkgs.get(i); }
             @Override public long getItemId(int i) { return i; }
             @Override public View getView(int i, View conv, android.view.ViewGroup parent) {
-                android.widget.ImageView iv = conv instanceof android.widget.ImageView
-                        ? (android.widget.ImageView) conv : new android.widget.ImageView(MainActivity.this);
-                int sz = (int) (88 * d);
-                iv.setLayoutParams(new android.widget.AbsListView.LayoutParams(sz, sz));
-                iv.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-                iv.setPadding((int) (8 * d), (int) (8 * d), (int) (8 * d), (int) (8 * d));
+                LinearLayout cell;
+                android.widget.ImageView iv;
+                TextView tv;
+                if (conv instanceof LinearLayout) {
+                    cell = (LinearLayout) conv;
+                    iv = (android.widget.ImageView) cell.getChildAt(0);
+                    tv = (TextView) cell.getChildAt(1);
+                } else {
+                    cell = new LinearLayout(MainActivity.this);
+                    cell.setOrientation(LinearLayout.VERTICAL);
+                    cell.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+                    cell.setPadding(0, (int) (6 * d), 0, (int) (6 * d));
+                    iv = new android.widget.ImageView(MainActivity.this);
+                    int sz = (int) (72 * d);
+                    iv.setLayoutParams(new LinearLayout.LayoutParams(sz, sz));
+                    iv.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                    tv = new TextView(MainActivity.this);
+                    tv.setTypeface(android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD));
+                    tv.setTextSize(11);
+                    tv.setLetterSpacing(0.15f);
+                    tv.setTextColor(0xFFFFB21A);
+                    tv.setShadowLayer(8f, 0f, 0f, 0x99FFB21A);
+                    tv.setAllCaps(true);
+                    tv.setSingleLine(true);
+                    tv.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    tv.setGravity(android.view.Gravity.CENTER);
+                    tv.setPadding((int) (2 * d), (int) (6 * d), (int) (2 * d), 0);
+                    cell.addView(iv);
+                    cell.addView(tv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                }
                 iv.setImageDrawable(icons.get(i));
-                iv.setContentDescription(labels.get(i));
-                return iv;
+                tv.setText(labels.get(i));
+                cell.setContentDescription(labels.get(i));
+                return cell;
             }
         });
         grid.setOnItemClickListener((p, v, i, id) -> {
