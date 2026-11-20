@@ -95,7 +95,9 @@ public class TrackerService extends Service implements LocationListener {
     }
 
     private static final String CHANNEL = "rit";
-    private static final float MOVING_KMH = 3f;
+    private static final float MOVING_KMH = 6f;
+    private int movingStreak = 0;
+    private boolean moving = false;
     /** Gewicht auto + bestuurder (kg) voor optrek-verbruik. */
     private static final float CAR_KG = 1600f;
     private static final float MAX_ACCURACY_M = 35f;
@@ -362,8 +364,27 @@ public class TrackerService extends Service implements LocationListener {
         long now = System.currentTimeMillis();
         lastFixTime = now;
         float kmh = loc.hasSpeed() ? loc.getSpeed() * 3.6f : 0f;
+
+        // ---- stilstand-filter tegen GPS-gedrift ----
+        // 1) motor uit (accu < 13,0 V) of contact uit = de auto staat stil, wat de GPS ook zegt
+        boolean voltsKnown = CarSignals.volts > 0 && System.currentTimeMillis() - CarSignals.voltsTime < 60_000L;
+        boolean parked = CarSignals.contact == 0 || (voltsKnown && CarSignals.volts < 13.0f);
+        // 2) GPS moet het eens zijn met zichzelf: snelheid én verplaatsing, een paar fixes achter elkaar
+        float implied = -1f;
+        if (last != null) {
+            float dtS = (loc.getTime() - last.getTime()) / 1000f;
+            if (dtS > 0f && dtS < 5f) implied = last.distanceTo(loc) / dtS * 3.6f;
+        }
+        float acc = loc.hasAccuracy() ? loc.getAccuracy() : 99f;
+        boolean looksMoving = kmh >= 15f
+                || (kmh >= MOVING_KMH && acc <= 20f && implied >= 4f);
+        movingStreak = (looksMoving && !parked) ? Math.min(movingStreak + 1, 10) : 0;
+        if (moving) moving = looksMoving && !parked;          // stoppen gaat meteen
+        else moving = movingStreak >= 3;                        // rijden pas na 3 fixes op rij
+        if (!moving) kmh = 0f;
+
         speedKmh = kmh;
-        if (loc.hasBearing() && kmh >= MOVING_KMH) bearing = loc.getBearing();
+        if (loc.hasBearing() && moving) bearing = loc.getBearing();
         lastAccuracy = loc.hasAccuracy() ? loc.getAccuracy() : -1f;
 
         if (now - lastGpsNote >= 5000) {
@@ -380,8 +401,9 @@ public class TrackerService extends Service implements LocationListener {
         if (last != null) {
             float dt = (loc.getTime() - last.getTime()) / 1000f;
             if (dt > 0f && dt < 5f) {
-                if (kmh < MOVING_KMH) {
-                    if (!store.tripEnded()) store.addFuel(Store.IDLE_LPH * dt / 3600f);
+                if (!moving) {
+                    // stationair alleen als de motor (vermoedelijk) draait
+                    if (!store.tripEnded() && !parked) store.addFuel(Store.IDLE_LPH * dt / 3600f);
                 } else {
                     float v1 = last.hasSpeed() ? last.getSpeed() : 0f;
                     float v2 = loc.getSpeed();
@@ -394,7 +416,7 @@ public class TrackerService extends Service implements LocationListener {
             }
         }
 
-        if (kmh >= MOVING_KMH) {
+        if (moving) {
             lastMoveElapsed = android.os.SystemClock.elapsedRealtime();
             // Vorige rit afgesloten (stilstand of herstart) -> nu begint een nieuwe
             if (store.tripEnded()) store.startNewTrip();
