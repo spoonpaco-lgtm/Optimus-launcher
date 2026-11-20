@@ -10,11 +10,22 @@
     android:paddingBottom="12dp">
 
     <!-- Retro LED-cockpit (alles getekend) -->
-    <nl.spoonpaco.optimuslauncher.CockpitView
-        android:id="@+id/cockpit"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
+
+        <nl.spoonpaco.optimuslauncher.CockpitView
+            android:id="@+id/cockpit"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- KITT-scanner over de pinstripe -->
+        <nl.spoonpaco.optimuslauncher.ScannerView
+            android:id="@+id/scanner"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
 
     <!-- Oude statusbalk (verborgen; logica blijft voor debug) -->
     <LinearLayout

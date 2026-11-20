@@ -61,6 +61,7 @@ public class TripLogActivity extends Activity {
         top.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         toggleRow = new LinearLayout(this);
         top.addView(toggleRow);
+        top.addView(choice("HIGH SCORES", false, v -> showHighscores()), btnLp(140));
         top.addView(choice(Lang.t("NAAR USB", "TO USB"), false, v -> export()), btnLp(130));
         top.addView(choice(Lang.t("SLUITEN", "CLOSE"), true, v -> finish()), btnLp(120));
         root.addView(top);
@@ -85,7 +86,8 @@ public class TripLogActivity extends Activity {
                 SimpleDateFormat df = new SimpleDateFormat("EEE d MMM  HH:mm", Lang.locale());
                 t.setText(df.format(new Date(tr.start)).replace(".", "").toUpperCase(Lang.locale())
                         + String.format(Locale.US, "\n%.1f km · %d min", tr.km, tr.minutes)
-                        + (tr.cost >= 0 ? String.format(Locale.US, " · € %.2f", tr.cost) : ""));
+                        + (tr.cost >= 0 ? String.format(Locale.US, " · € %.2f", tr.cost) : "")
+                        + (tr.score >= 0 ? " · score " + tr.score : ""));
                 t.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
                 t.setTextSize(14);
                 t.setLetterSpacing(0.06f);
@@ -166,6 +168,7 @@ public class TripLogActivity extends Activity {
         s.append(String.format(Locale.US, "~%.2f l", t.liters));
         if (t.km > 0.5f && t.liters > 0.01f) s.append(String.format(Locale.US, "   ·   %.1f km/l", t.km / t.liters));
         if (t.cost >= 0) s.append(String.format(Locale.US, "   ·   € %.2f", t.cost));
+        if (t.score >= 0) s.append("   ·   SCORE ").append(t.score);
         if (t.odoStart > 0 && t.odoEnd > 0)
             s.append(String.format(Locale.US, "\n%s %,d → %,d", Lang.t("km-stand", "odometer"), t.odoStart, t.odoEnd));
         details.setText(s.toString());
@@ -193,6 +196,19 @@ public class TripLogActivity extends Activity {
     private static String days(int n) {
         return n >= 0 ? String.format(Locale.US, Lang.t("over %d dagen", "in %d days"), n)
                 : String.format(Locale.US, Lang.t("%d dagen te laat!", "%d days overdue!"), -n);
+    }
+
+    private void showHighscores() {
+        RetroCard card = new RetroCard(this, theme);
+        card.setSizeDp(460, 420);
+        card.title = "HIGH SCORES";
+        card.rows = TripLog.highscores(this);
+        card.hint = Lang.t("TIK = OK", "TAP = OK");
+        final AlertDialog dlg = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar)
+                .setView(card).create();
+        card.setOnClickListener(v -> dlg.dismiss());
+        dlg.show();
+        if (dlg.getWindow() != null) dlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
     }
 
     private void export() {

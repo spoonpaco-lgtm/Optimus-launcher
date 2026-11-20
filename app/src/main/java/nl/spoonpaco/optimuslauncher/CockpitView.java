@@ -38,6 +38,8 @@ public class CockpitView extends View {
     public boolean lContact, lMotor, lLicht, lTrips, lAuto, lLog;
     /** Accubewaker: 0 goed, 1 let op (geel), 2 slecht (rood). */
     public int accuWarn = 0;
+    /** Kleur voor de hint onderaan een kaart (0 = standaard gedimd). */
+    public int hintColor = 0;
 
     public Listener listener;
 
@@ -507,7 +509,7 @@ public class CockpitView extends View {
         }
         if (hint != null) {
             p.setTextAlign(Paint.Align.RIGHT);
-            text(c, hint, panel.right - 18, panel.bottom - 12, 10, DIM);
+            text(c, hint, panel.right - 18, panel.bottom - 12, 10, hintColor != 0 ? hintColor : DIM);
             p.setTextAlign(Paint.Align.LEFT);
         }
     }

@@ -18,13 +18,13 @@ import java.util.Locale;
  * in files/trips/<id>.pts. Alleen lokaal op de tablet; export naar USB-stick vanuit het rittenscherm.
  */
 public final class TripLog {
-    public static final String HEADER = "id;start;eind;start_lat;start_lon;eind_lat;eind_lon;km;minuten;gem_kmh;max_kmh;liter;kosten_eur;kmstand_start;kmstand_eind";
+    public static final String HEADER = "id;start;eind;start_lat;start_lon;eind_lat;eind_lon;km;minuten;gem_kmh;max_kmh;liter;kosten_eur;kmstand_start;kmstand_eind;score";
 
     public static final class Trip {
         public long id, start, end;
         public double sLat, sLon, eLat, eLon;
         public float km, avg, max, liters, cost;
-        public int minutes, odoStart, odoEnd;
+        public int minutes, odoStart, odoEnd, score = -1;
     }
 
     private TripLog() { }
@@ -81,10 +81,27 @@ public final class TripLog {
         long lm = store.lastMoveTime();
         if (lm > 0) end -= Math.max(0L, System.currentTimeMillis() - lm);
         if (end < id) end = id;
-        String line = String.format(Locale.US, "%d;%d;%d;%s;%s;%.6f;%.6f;%.2f;%d;%.0f;%.0f;%.2f;%.2f;%d;%d\n",
+        // records vergelijken met eerdere ritten (vóór deze rit wordt toegevoegd)
+        int score = store.summaryScore();
+        float kmpl = sum[4] > 0.01f && sum[0] >= 2f ? sum[0] / sum[4] : -1f;
+        int bestScore = -1; float bestKmpl = -1f, longest = 0f; int n = 0;
+        for (Trip t : all(c)) {
+            n++;
+            bestScore = Math.max(bestScore, t.score);
+            if (t.km >= 2f && t.liters > 0.01f) bestKmpl = Math.max(bestKmpl, t.km / t.liters);
+            longest = Math.max(longest, t.km);
+        }
+        StringBuilder rec = new StringBuilder();
+        if (n > 0) {
+            if (score >= 0 && score > bestScore) rec.append("SCORE ");
+            if (kmpl > 0 && kmpl > bestKmpl) rec.append("KM/L ");
+            if (sum[0] > longest && sum[0] >= 5f) rec.append("KM ");
+        }
+        store.setNewRecord(rec.toString().trim());
+        String line = String.format(Locale.US, "%d;%d;%d;%s;%s;%.6f;%.6f;%.2f;%d;%.0f;%.0f;%.2f;%.2f;%d;%d;%d\n",
                 id, id, end, s.getString("sLat", "0"), s.getString("sLon", "0"), eLat, eLon,
                 sum[0], Math.round((end - id) / 60000f), sum[2], sum[3], sum[4], sum[5],
-                s.getInt("odoStart", -1), store.odometer());
+                s.getInt("odoStart", -1), store.odometer(), score);
         File f = new File(dir(c), "ritten.csv");
         if (!f.exists()) append(f, HEADER + "\n");
         append(f, line);
@@ -116,11 +133,35 @@ public final class TripLog {
                 t.avg = Float.parseFloat(p[9]); t.max = Float.parseFloat(p[10]);
                 t.liters = Float.parseFloat(p[11]); t.cost = Float.parseFloat(p[12]);
                 t.odoStart = Integer.parseInt(p[13]); t.odoEnd = Integer.parseInt(p[14]);
+                if (p.length > 15) t.score = Integer.parseInt(p[15].trim());
                 out.add(t);
             }
         } catch (Exception ignored) { }
         Collections.reverse(out);
         return out;
+    }
+
+    /** Highscores: top 5 scores, plus zuinigste en langste rit, als display-regels. */
+    public static String[][] highscores(Context c) {
+        List<Trip> all = all(c);
+        List<Trip> byScore = new ArrayList<>();
+        for (Trip t : all) if (t.score >= 0) byScore.add(t);
+        Collections.sort(byScore, (a, b) -> b.score - a.score);
+        java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("d MMM", Lang.locale());
+        List<String[]> rows = new ArrayList<>();
+        for (int i = 0; i < Math.min(5, byScore.size()); i++) {
+            Trip t = byScore.get(i);
+            rows.add(new String[]{(i + 1) + "  " + df.format(new java.util.Date(t.start)).replace(".", "").toUpperCase(Lang.locale()), String.valueOf(t.score)});
+        }
+        while (rows.size() < 5) rows.add(new String[]{(rows.size() + 1) + "  ---", "--"});
+        Trip eco = null, lng = null;
+        for (Trip t : all) {
+            if (t.km >= 2f && t.liters > 0.01f && (eco == null || t.km / t.liters > eco.km / eco.liters)) eco = t;
+            if (lng == null || t.km > lng.km) lng = t;
+        }
+        rows.add(new String[]{Lang.t("ZUINIGST KM/L", "BEST KM/L"), eco == null ? "--" : String.format(Locale.US, "%.1f", eco.km / eco.liters)});
+        rows.add(new String[]{Lang.t("LANGSTE KM", "LONGEST KM"), lng == null ? "--" : String.format(Locale.US, "%.1f", lng.km)});
+        return rows.toArray(new String[0][]);
     }
 
     /** Routepunten van een rit als {lat, lon}. */

@@ -104,6 +104,7 @@ public class TrackerService extends Service implements LocationListener {
 
     private LocationManager lm;
     private Location last;
+    private long lastHarsh = 0L;
     private Store store;
     private long lastGpsNote = 0L;
 
@@ -490,6 +491,12 @@ public class TrackerService extends Service implements LocationListener {
                 } else {
                     float v1 = last.hasSpeed() ? last.getSpeed() : 0f;
                     float v2 = loc.getSpeed();
+                    // rijstijl: hard optrekken (> 2,5 m/s²) of hard remmen (< -3 m/s²), max 1 keer per 3 s
+                    if (dt >= 0.8f && !store.tripEnded()) {
+                        float a = (v2 - v1) / dt;
+                        long el = android.os.SystemClock.elapsedRealtime();
+                        if ((a > 2.5f || a < -3.0f) && el - lastHarsh > 3000L) { lastHarsh = el; store.addHarsh(); }
+                    }
                     if (v2 > v1) {
                         // kinetische energie / (energie benzine 34,2 MJ/l x motorrendement ~25%)
                         float joule = 0.5f * CAR_KG * (v2 * v2 - v1 * v1);

@@ -84,6 +84,7 @@ public class MainActivity extends Activity {
         stTank = findViewById(R.id.st_tank);
         cockpit = findViewById(R.id.cockpit);
         applyTheme(Theme.byId(getSharedPreferences("optimus", MODE_PRIVATE).getString("theme", "led")));
+        handler.postDelayed(() -> { if (scanner != null) scanner.sweepOnce(); }, 600);
         cockpit.listener = new CockpitView.Listener() {
             @Override public void onSpeedTap() { toggleOverlay(); }
             @Override public void onClockLongPress() { startActivity(new Intent(MainActivity.this, DebugActivity.class)); }
@@ -139,7 +140,17 @@ public class MainActivity extends Activity {
             }
         });
         findViewById(R.id.btn_menu).setOnClickListener(v -> showMenu());
-        findViewById(R.id.btn_trips).setOnClickListener(v -> startActivity(new Intent(this, TripLogActivity.class)));
+        // RIT: kort = registratie aan/uit, lang = rittenscherm
+        findViewById(R.id.btn_trips).setOnClickListener(v -> {
+            boolean on = !store.tripLogOn();
+            store.setTripLogOn(on);
+            toast(on ? Lang.t("Rittenregistratie AAN", "Trip logging ON") : Lang.t("Rittenregistratie UIT", "Trip logging OFF"));
+            refresh();
+        });
+        findViewById(R.id.btn_trips).setOnLongClickListener(v -> {
+            startActivity(new Intent(this, TripLogActivity.class));
+            return true;
+        });
         // Lang indrukken op een icoon = naam tonen (behalve AA: dat is afspelen/pauze)
         for (int id : new int[]{R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_apps,
                 R.id.btn_settings, R.id.btn_menu}) {
@@ -271,9 +282,13 @@ public class MainActivity extends Activity {
     private static final int[] KEY_ICON = {R.drawable.ic_aa, R.drawable.ic_radio, R.drawable.ic_eq, R.drawable.ic_fuel,
             R.drawable.ic_trip, R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_menu};
 
+    private ScannerView scanner;
+
     private void applyTheme(Theme t) {
         theme = t;
         cockpit.setTheme(t);
+        if (scanner == null) scanner = findViewById(R.id.scanner);
+        if (scanner != null) scanner.setTheme(t);
         float d = getResources().getDisplayMetrics().density;
         for (int i = 0; i < KEY_IDS.length; i++) {
             android.widget.ImageButton b = findViewById(KEY_IDS[i]);
@@ -533,6 +548,7 @@ public class MainActivity extends Activity {
         c.lTrips = store.tripLogOn();
         c.accuWarn = BatteryHealth.level;
         c.lAuto = aaSeenRecently;
+        if (scanner != null) scanner.update(CarSignals.mcu04 == 1, Math.max(BatteryHealth.level, store.serviceDue(Clock.now()) ? 1 : 0));
         c.lLog = CarLogger.state == 2;
         c.invalidate();
     }
@@ -664,10 +680,28 @@ public class MainActivity extends Activity {
     private void maybeShowSummary() {
         if (!store.summaryPending() || (summaryDialog != null && summaryDialog.isShowing())) return;
         RetroCard card = new RetroCard(this, theme);
-        card.setSizeDp(460, 400);
+        card.setSizeDp(460, 440);
         card.title = Lang.t("RIT KLAAR", "TRIP DONE");
         card.rows = store.summaryRows();
         card.hint = Lang.t("TIK = OK", "TAP = OK");
+        final String rec = store.newRecord();
+        if (!rec.isEmpty()) {
+            // nieuw record: hint knippert "NEW HIGH SCORE"
+            final String okText = card.hint;
+            final String hs = "NEW HIGH SCORE  " + rec;
+            Runnable blink = new Runnable() {
+                boolean on;
+                @Override public void run() {
+                    if (summaryDialog == null || !summaryDialog.isShowing()) return;
+                    on = !on;
+                    card.hint = on ? hs : okText;
+                    card.hintCol = on ? CockpitView.WA : 0;
+                    card.invalidate();
+                    handler.postDelayed(this, 600);
+                }
+            };
+            handler.postDelayed(blink, 300);
+        }
         summaryDialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar)
                 .setView(card)
                 .setOnCancelListener(d -> store.clearSummary())
@@ -886,6 +920,12 @@ public class MainActivity extends Activity {
 
     /** Staat de launcher op het scherm? (dan geen zwevend venster nodig) */
     public static volatile boolean visible = false;
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // terug na het opstartfilmpje of de HOME-knop: één sweep
+        if (scanner != null) scanner.sweepOnce();
+    }
 
     @Override protected void onResume() {
         super.onResume();

@@ -13,7 +13,7 @@ public class RetroCard extends View {
     public float scale = 1f;
     public String title, big, unit = null, side, sideLabel = "KM/L", hint;
     public String[][] rows;
-    public int titleCol, bigCol, sideCol, rowCol;
+    public int titleCol, bigCol, sideCol, rowCol, hintCol;
     public Theme theme;
 
     public RetroCard(Context c, Theme t) {
@@ -42,6 +42,7 @@ public class RetroCard extends View {
     @Override protected void onDraw(Canvas c) {
         c.save();
         c.scale(d * scale, d * scale);
+        painter.hintColor = hintCol;
         painter.paintCard(c, wDp, hDp, title, titleCol, big, unit != null ? unit : Lang.t("KM/U", "KM/H"), bigCol, side, sideLabel, sideCol, rows, rowCol, hint);
         c.restore();
     }

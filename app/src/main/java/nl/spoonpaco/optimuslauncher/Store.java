@@ -145,8 +145,33 @@ public class Store {
             .putFloat("sumMax", tripMaxKmh())
             .putFloat("sumL", tripLiters())
             .putFloat("sumCost", pr > 0 ? tripLiters() * pr : -1f)
+            .putInt("sumScore", tripScore())
+            .putString("newRecord", "")
             .apply();
     }
+
+    // ---- rijstijlscore ----
+
+    public void addHarsh() { p.edit().putInt("tripHarsh", p.getInt("tripHarsh", 0) + 1).apply(); }
+    public int tripHarsh() { return p.getInt("tripHarsh", 0); }
+
+    /**
+     * Score 0-100 voor de lopende rit (-1 bij korter dan 2 km).
+     * 60% rustig rijden (hard optrekken/remmen per 10 km), 40% zuinigheid t.o.v. je normale 12,2 km/l.
+     */
+    public int tripScore() {
+        float km = tripKm(), l = tripLiters();
+        if (km < 2f) return -1;
+        float per10 = tripHarsh() / km * 10f;
+        float smooth = 100f - Math.min(70f, per10 * 12f);
+        float kmpl = l > 0.01f ? km / l : 12.2f;
+        float econ = Math.max(0f, Math.min(100f, 50f + (kmpl - 12.2f) * 8f));
+        return Math.round(0.6f * smooth + 0.4f * econ);
+    }
+
+    public int summaryScore() { return p.getInt("sumScore", -1); }
+    public String newRecord() { return p.getString("newRecord", ""); }
+    public void setNewRecord(String r) { p.edit().putString("newRecord", r).apply(); }
 
     public String summaryText() {
         java.util.Locale nl = new java.util.Locale("nl");
@@ -177,7 +202,8 @@ public class Store {
                 {Lang.t("MAX KM/U", "MAX KM/H"), String.format(us, "%.0f", p.getFloat("sumMax", 0f))},
                 {Lang.t("LITER", "LITRES"), String.format(us, "%.2f", l)},
                 {"KM/L", l > 0.01f ? String.format(us, "%.1f", km / l) : "--"},
-                {"EURO", c >= 0 ? String.format(us, "%.2f", c) : "--"}};
+                {"EURO", c >= 0 ? String.format(us, "%.2f", c) : "--"},
+                {"SCORE", summaryScore() >= 0 ? String.valueOf(summaryScore()) : "--"}};
     }
 
     public String summaryShort() {
@@ -195,7 +221,7 @@ public class Store {
             .putFloat("lastTripMax", tripMaxKmh())
             .putFloat("lastTripL", tripLiters())
             .putFloat("tripKm", 0f).putFloat("tripH", 0f)
-            .putFloat("tripMax", 0f).putFloat("tripL", 0f)
+            .putFloat("tripMax", 0f).putFloat("tripL", 0f).putInt("tripHarsh", 0)
             .putBoolean("tripEnded", false)
             .apply();
     }
