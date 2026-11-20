@@ -64,7 +64,7 @@ public class CockpitView extends View {
     private final Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Typeface label = Typeface.create("sans-serif-condensed", Typeface.BOLD);
     private final SimpleDateFormat clockFmt = new SimpleDateFormat("HH:mm", Locale.US);
-    private final SimpleDateFormat dateFmt = new SimpleDateFormat("EEE d MMM", new Locale("nl"));
+    
 
     // tikgebieden (design-coördinaten)
     private final RectF rSpeed = new RectF(), rClock = new RectF(), rTank = new RectF();
@@ -234,7 +234,7 @@ public class CockpitView extends View {
         RectF clockR = new RectF(0, 2, 170, 60);
         drawSegCentered(c, clockFmt.format(new Date(now)), clockR, 34, AMB);
         glass(c, clockR);
-        text(c, dateFmt.format(new Date(now)).replace(".", "").toUpperCase(new Locale("nl")), 184, 26, 12, TXT);
+        text(c, new SimpleDateFormat("EEE d MMM", Lang.locale()).format(new Date(now)).replace(".", "").toUpperCase(Lang.locale()), 184, 26, 12, TXT);
         if (leds) { text(c, "OPTIMUS", 184, 50, 13, 0xFFECEFF4); } else {
         p.setShader(new LinearGradient(0, 36, 0, 50, 0xFFFFFFFF, 0xFF55555E, Shader.TileMode.CLAMP));
         p.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
@@ -251,7 +251,7 @@ public class CockpitView extends View {
         c.clipRect(r);
         float hd = heading < 0 ? 0 : heading;
         float pxPerDeg = r.width() / 150f;
-        String[] names = {"N", "NO", "O", "ZO", "Z", "ZW", "W", "NW"};
+        String[] names = Lang.en ? new String[]{"N", "NE", "E", "SE", "S", "SW", "W", "NW"} : new String[]{"N", "NO", "O", "ZO", "Z", "ZW", "W", "NW"};
         int start = (int) Math.floor((hd - 80) / 5) * 5;
         if (leds) {
             for (int d = start; d <= hd + 80; d += 5) {
@@ -321,9 +321,9 @@ public class CockpitView extends View {
     private void drawSpeedPanel(Canvas c) {
         RectF r = pan1;
         float x = r.left + 20, y = r.top + 18;
-        text(c, "SNELHEID", x, y + 12, 14, RED);
+        text(c, Lang.t("SNELHEID", "SPEED"), x, y + 12, 14, RED);
         p.setTextAlign(Paint.Align.RIGHT);
-        text(c, speed < 0 ? "GPS ZOEKT" : "GPS · " + sats + " SAT", r.right - 20, y + 11, 10, DIM);
+        text(c, speed < 0 ? Lang.t("GPS ZOEKT", "GPS SEARCH") : "GPS · " + sats + " SAT", r.right - 20, y + 11, 10, DIM);
         p.setTextAlign(Paint.Align.LEFT);
         float ph = r.height();
         float digitH = Math.min(112, ph * 0.30f);
@@ -331,7 +331,7 @@ public class CockpitView extends View {
         window(c, w, tRed, eRed);
         drawSegCentered(c, speed < 0 ? "--" : (speed < 10 ? " " + speed : String.valueOf(Math.min(speed, 199))), w, digitH, RED);
         glass(c, w);
-        text(c, "KM/U", w.right + 12, w.bottom - 10, 16, RED);
+        text(c, Lang.t("KM/U", "KM/H"), w.right + 12, w.bottom - 10, 16, RED);
         float by = w.bottom + 14;
         int lit = speed < 0 ? 0 : Math.min(22, Math.round(speed / 160f * 22f));
         bar(c, x, by, r.right - 20, 16, leds ? 16 : 22, leds ? Math.round(lit * 16f / 22f) : lit, 0, tRed, eRed);
@@ -346,7 +346,7 @@ public class CockpitView extends View {
         float my = r.bottom - 64;
         float half = (r.width() - 52) / 2f;
         miniValue(c, "MAX", fmt0(tripMax), x, my, half, RED, tRed, eRed);
-        miniValue(c, "GEM", fmt0(tripAvg), x + half + 12, my, half, RED, tRed, eRed);
+        miniValue(c, Lang.t("GEM", "AVG"), fmt0(tripAvg), x + half + 12, my, half, RED, tRed, eRed);
     }
 
     private void drawTripPanel(Canvas c) {
@@ -354,7 +354,7 @@ public class CockpitView extends View {
         float x = r.left + 20;
         // lampjes 3 x 2
         float bx = r.left + 18, bw = r.width() - 36;
-        String[] n = {"CONTACT", "MOTOR", "LICHT", "HANDREM", "AUTO", "LOG"};
+        String[] n = Lang.en ? new String[]{"IGNITION", "ENGINE", "LIGHTS", "HANDBRAKE", "AUTO", "LOG"} : new String[]{"CONTACT", "MOTOR", "LICHT", "HANDREM", "AUTO", "LOG"};
         int[] col = {0xFFF4E04D, WG, WA, WR, 0xFF2F8CFF, WG};
         boolean[] on = {lContact, lMotor, lLicht, lHandrem, lAuto, lLog};
         for (int i = 0; i < 6; i++) {
@@ -366,15 +366,15 @@ public class CockpitView extends View {
             p.setTextAlign(Paint.Align.LEFT);
         }
         float y = r.top + 176;
-        text(c, "DEZE RIT", x, y, 12, GRN);
+        text(c, Lang.t("DEZE RIT", "THIS TRIP"), x, y, 12, GRN);
         // eigen display voor de rit
         RectF tw = new RectF(x - 6, y + 8, r.right - 14, r.bottom - 86);
         window(c, tw, dark(GRN, 0.12f), dark(GRN, 0.26f));
         float rowH = (tw.height() - 14) / 4f;
         String[][] rows = {
                 {"KM", String.format(Locale.US, "%.1f", tripKm)},
-                {"TIJD", String.format(Locale.US, "%d:%02d", tripMinutes / 60, tripMinutes % 60)},
-                {"LITER", String.format(Locale.US, "%.2f", tripL)},
+                {Lang.t("TIJD", "TIME"), String.format(Locale.US, "%d:%02d", tripMinutes / 60, tripMinutes % 60)},
+                {Lang.t("LITER", "LITRES"), String.format(Locale.US, "%.2f", tripL)},
                 {"EURO", tripCost >= 0 ? String.format(Locale.US, "%.2f", tripCost) : "--"}};
         float segH = Math.min(22, rowH * 0.62f);
         for (int i = 0; i < 4; i++) {
@@ -386,7 +386,7 @@ public class CockpitView extends View {
         glass(c, tw);
         // accu: balk + spanning samen in één display
         float ay = r.bottom - 76;
-        text(c, "ACCU", x, ay + 10, 11, BLU);
+        text(c, Lang.t("ACCU", "BATTERY"), x, ay + 10, 11, BLU);
         RectF aw = new RectF(x - 6, ay + 18, r.right - 14, r.bottom - 16);
         window(c, aw, dark(BLU, 0.12f), dark(BLU, 0.26f));
         // 11,5 V (leeg, rood) .. 14,5 V (laden, groen)
@@ -408,9 +408,9 @@ public class CockpitView extends View {
     private void drawFuelPanel(Canvas c) {
         RectF r = pan3;
         float x = r.left + 20, y = r.top + 18;
-        text(c, "VERBRUIK", x, y + 12, 14, AMB);
+        text(c, Lang.t("VERBRUIK", "ECONOMY"), x, y + 12, 14, AMB);
         p.setTextAlign(Paint.Align.RIGHT);
-        text(c, "GESCHAT", r.right - 20, y + 11, 10, DIM);
+        text(c, Lang.t("GESCHAT", "ESTIMATED"), r.right - 20, y + 11, 10, DIM);
         p.setTextAlign(Paint.Align.LEFT);
         float digitH = Math.min(82, r.height() * 0.22f);
         float kml = l100 > 0 ? 100f / l100 : -1f;
@@ -434,7 +434,7 @@ public class CockpitView extends View {
         float ty = r.bottom - 76;
         text(c, "TANK", x, ty + 10, 11, YEL);
         p.setTextAlign(Paint.Align.RIGHT);
-        text(c, tankL < 0 ? "TANKEN INVOEREN" : String.format(Locale.US, "~%.0f / 57 L", tankL), r.right - 20, ty + 10, 10, DIM);
+        text(c, tankL < 0 ? Lang.t("TANKEN INVOEREN", "ENTER FUEL") : String.format(Locale.US, "~%.0f / 57 L", tankL), r.right - 20, ty + 10, 10, DIM);
         p.setTextAlign(Paint.Align.LEFT);
         RectF kw = new RectF(x - 6, ty + 18, r.right - 14, r.bottom - 16);
         window(c, kw, tAmb, eAmb);

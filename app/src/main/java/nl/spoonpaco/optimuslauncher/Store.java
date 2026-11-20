@@ -146,15 +146,15 @@ public class Store {
         float h = p.getFloat("sumH", 0f);
         int min = Math.round(h * 60f);
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format(nl, "Afstand: %.1f km\n", p.getFloat("sumKm", 0f)));
-        sb.append(min >= 60 ? String.format(nl, "Rijtijd: %d u %02d min\n", min / 60, min % 60)
-                            : String.format(nl, "Rijtijd: %d min\n", min));
-        sb.append(String.format(nl, "Gemiddeld: %.0f km/u\n", p.getFloat("sumAvg", 0f)));
-        sb.append(String.format(nl, "Hoogste: %.0f km/u\n", p.getFloat("sumMax", 0f)));
-        sb.append(String.format(nl, "Verbruik: ~%.1f liter", p.getFloat("sumL", 0f)));
+        sb.append(String.format(nl, Lang.t("Afstand: %.1f km\n", "Distance: %.1f km\n"), p.getFloat("sumKm", 0f)));
+        sb.append(min >= 60 ? String.format(nl, Lang.t("Rijtijd: %d u %02d min\n", "Drive time: %d h %02d min\n"), min / 60, min % 60)
+                            : String.format(nl, Lang.t("Rijtijd: %d min\n", "Drive time: %d min\n"), min));
+        sb.append(String.format(nl, Lang.t("Gemiddeld: %.0f km/u\n", "Average: %.0f km/h\n"), p.getFloat("sumAvg", 0f)));
+        sb.append(String.format(nl, Lang.t("Hoogste: %.0f km/u\n", "Top: %.0f km/h\n"), p.getFloat("sumMax", 0f)));
+        sb.append(String.format(nl, Lang.t("Verbruik: ~%.1f liter", "Fuel: ~%.1f litres"), p.getFloat("sumL", 0f)));
         float c = p.getFloat("sumCost", -1f);
-        if (c >= 0) sb.append(String.format(nl, "\nKosten: ~€ %.2f", c));
-        else sb.append("\nKosten: voer bij Tanken een prijs in");
+        if (c >= 0) sb.append(String.format(nl, Lang.t("\nKosten: ~€ %.2f", "\nCost: ~€ %.2f"), c));
+        else sb.append(Lang.t("\nKosten: voer bij Tanken een prijs in", "\nCost: enter a price under Fuel"));
         return sb.toString();
     }
 
@@ -164,11 +164,11 @@ public class Store {
         float km = p.getFloat("sumKm", 0f), l = p.getFloat("sumL", 0f), c = p.getFloat("sumCost", -1f);
         int min = Math.round(p.getFloat("sumH", 0f) * 60f);
         return new String[][]{
-                {"AFSTAND KM", String.format(us, "%.1f", km)},
-                {"RIJTIJD", String.format(us, "%d:%02d", min / 60, min % 60)},
-                {"GEM KM/U", String.format(us, "%.0f", p.getFloat("sumAvg", 0f))},
-                {"MAX KM/U", String.format(us, "%.0f", p.getFloat("sumMax", 0f))},
-                {"LITER", String.format(us, "%.2f", l)},
+                {Lang.t("AFSTAND KM", "DISTANCE KM"), String.format(us, "%.1f", km)},
+                {Lang.t("RIJTIJD", "DRIVE TIME"), String.format(us, "%d:%02d", min / 60, min % 60)},
+                {Lang.t("GEM KM/U", "AVG KM/H"), String.format(us, "%.0f", p.getFloat("sumAvg", 0f))},
+                {Lang.t("MAX KM/U", "MAX KM/H"), String.format(us, "%.0f", p.getFloat("sumMax", 0f))},
+                {Lang.t("LITER", "LITRES"), String.format(us, "%.2f", l)},
                 {"KM/L", l > 0.01f ? String.format(us, "%.1f", km / l) : "--"},
                 {"EURO", c >= 0 ? String.format(us, "%.2f", c) : "--"}};
     }
@@ -176,7 +176,7 @@ public class Store {
     public String summaryShort() {
         java.util.Locale nl = new java.util.Locale("nl");
         float c = p.getFloat("sumCost", -1f);
-        return String.format(nl, "%.1f km · gem %.0f · max %.0f km/u · ~%.1f l",
+        return String.format(nl, Lang.t("%.1f km · gem %.0f · max %.0f km/u · ~%.1f l", "%.1f km · avg %.0f · max %.0f km/h · ~%.1f l"),
                 p.getFloat("sumKm", 0f), p.getFloat("sumAvg", 0f), p.getFloat("sumMax", 0f), p.getFloat("sumL", 0f))
                 + (c >= 0 ? String.format(nl, " · € %.2f", c) : "");
     }

@@ -57,7 +57,7 @@ public class MainActivity extends Activity {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", NL);
-    private final SimpleDateFormat dateFmt = new SimpleDateFormat("EEEE d MMMM", NL);
+    private final SimpleDateFormat dateFmt = new SimpleDateFormat("EEEE d MMMM", Lang.locale());
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -105,7 +105,7 @@ public class MainActivity extends Activity {
         // Lang indrukken op Android Auto: afspelen/pauze zonder van scherm te wisselen
         findViewById(R.id.btn_aa).setOnLongClickListener(v -> {
             mediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE);
-            toast("Afspelen / pauze");
+            toast(Lang.t("Afspelen / pauze", "Play / pause"));
             return true;
         });
         // EQ: geluidsinstellingen van FlyAudio
@@ -113,7 +113,7 @@ public class MainActivity extends Activity {
             for (String pk : new String[]{"com.flyaudio.soundeffect", "com.flyaudio.service.dsp", "com.flyaudio.settings"}) {
                 if (installed(pk)) { launch(pk, "EQ"); return; }
             }
-            toast("Geen EQ-app gevonden");
+            toast(Lang.t("Geen EQ-app gevonden", "No EQ app found"));
         });
 
         // Tik op de snelheid: zwevend snelheidsvenster aan/uit (boven Android Auto)
@@ -135,7 +135,7 @@ public class MainActivity extends Activity {
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(i);
             } catch (Exception e) {
-                toast("Instellingen niet beschikbaar");
+                toast(Lang.t("Instellingen niet beschikbaar", "Settings not available"));
             }
         });
         findViewById(R.id.btn_menu).setOnClickListener(v -> showMenu());
@@ -175,7 +175,7 @@ public class MainActivity extends Activity {
         try {
             startForegroundService(new Intent(this, TrackerService.class));
         } catch (Exception e) {
-            toast("Ritregistratie kon niet starten");
+            toast(Lang.t("Ritregistratie kon niet starten", "Trip logging could not start"));
         }
     }
 
@@ -185,7 +185,7 @@ public class MainActivity extends Activity {
                 && results[0] == PackageManager.PERMISSION_GRANTED) {
             startTracker();
         } else if (req == REQ_LOCATION) {
-            toast("Zonder locatie geen snelheid en ritgegevens");
+            toast(Lang.t("Zonder locatie geen snelheid en ritgegevens", "No location means no speed or trip data"));
         }
     }
 
@@ -193,20 +193,20 @@ public class MainActivity extends Activity {
 
     private void toggleOverlay() {
         if (!Settings.canDrawOverlays(this)) {
-            toast("Zet 'Weergeven over andere apps' aan voor Optimus Launcher");
+            toast(Lang.t("Zet 'Weergeven over andere apps' aan voor Optimus Launcher", "Turn on 'Display over other apps' for Optimus Launcher"));
             try {
                 Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         android.net.Uri.parse("package:" + getPackageName()));
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(i);
             } catch (Exception e) {
-                toast("Instelling niet gevonden");
+                toast(Lang.t("Instelling niet gevonden", "Setting not found"));
             }
             return;
         }
         boolean on = !store.overlayEnabled();
         store.setOverlayEnabled(on);
-        toast(on ? "Zwevende snelheid aan (verschijnt buiten de launcher)" : "Zwevende snelheid uit");
+        toast(on ? Lang.t("Zwevende snelheid aan (verschijnt buiten de launcher)", "Floating speed on (shows outside the launcher)") : Lang.t("Zwevende snelheid uit", "Floating speed off"));
     }
 
     private void refresh() {
@@ -317,6 +317,20 @@ public class MainActivity extends Activity {
     }
 
     /** Menu: thema's, update zoeken, debug. */
+    private static String themeDescEn(String id) {
+        switch (id) {
+            case "vfd": return "Turquoise fluorescent, like digital 80s dashboards";
+            case "neon": return "Magenta and cyan neon on deep purple";
+            case "old": return "All made of lamps: dot-matrix digits and text";
+            default: return "Red, amber and green LED, like the sketch";
+        }
+    }
+
+    /** Taal gewisseld: datum, toetsen en cockpit opnieuw opbouwen. */
+    private void languageChanged() {
+        recreate();
+    }
+
     private void showMenu() {
         float d = getResources().getDisplayMetrics().density;
         LinearLayout box = new LinearLayout(this);
@@ -326,7 +340,7 @@ public class MainActivity extends Activity {
         box.setBackgroundColor(0xFF0A0A0D);
         final AlertDialog[] dlg = new AlertDialog[1];
 
-        box.addView(menuLabel("THEMA", theme.accent, d));
+        box.addView(menuLabel(Lang.t("THEMA", "THEME"), theme.accent, d));
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         for (Theme t : Theme.ALL) {
@@ -355,7 +369,7 @@ public class MainActivity extends Activity {
             name.setTextSize(15);
             card.addView(name);
             TextView desc = new TextView(this);
-            desc.setText(t.desc);
+            desc.setText(Lang.en ? themeDescEn(t.id) : t.desc);
             desc.setTextColor(0xFF8E8E9A);
             desc.setTextSize(12);
             card.addView(desc);
@@ -363,7 +377,7 @@ public class MainActivity extends Activity {
                 getSharedPreferences("optimus", MODE_PRIVATE).edit().putString("theme", t.id).apply();
                 applyTheme(t);
                 if (dlg[0] != null) dlg[0].dismiss();
-                toast("Thema: " + t.name);
+                toast(Lang.t("Thema: ", "Theme: ") + t.name);
             });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
             lp.setMargins((int) (6 * d), (int) (6 * d), (int) (6 * d), (int) (6 * d));
@@ -371,27 +385,38 @@ public class MainActivity extends Activity {
         }
         box.addView(row);
 
-        box.addView(menuLabel("NA OPSTARTEN / CONTACT AAN", theme.accent, d));
+        box.addView(menuLabel("TAAL / LANGUAGE", theme.accent, d));
+        LinearLayout rowL = new LinearLayout(this);
+        rowL.setOrientation(LinearLayout.HORIZONTAL);
+        rowL.addView(menuButton(R.drawable.ic_settings, (Lang.en ? "" : "● ") + "NEDERLANDS", d, v -> {
+            Lang.set(this, false); if (dlg[0] != null) dlg[0].dismiss(); languageChanged(); }),
+                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
+        rowL.addView(menuButton(R.drawable.ic_settings, (Lang.en ? "● " : "") + "ENGLISH", d, v -> {
+            Lang.set(this, true); if (dlg[0] != null) dlg[0].dismiss(); languageChanged(); }),
+                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
+        box.addView(rowL);
+
+        box.addView(menuLabel(Lang.t("NA OPSTARTEN / CONTACT AAN", "AFTER START-UP / IGNITION ON"), theme.accent, d));
         final android.content.SharedPreferences op = getSharedPreferences("optimus", MODE_PRIVATE);
         LinearLayout row3 = new LinearLayout(this);
         row3.setOrientation(LinearLayout.HORIZONTAL);
         boolean startAA = op.getBoolean("startAA", false);
         row3.addView(menuButton(R.drawable.ic_apps, (startAA ? "" : "● ") + "LAUNCHER", d, v -> {
-            op.edit().putBoolean("startAA", false).apply(); if (dlg[0] != null) dlg[0].dismiss(); toast("Na opstarten: launcher"); }),
+            op.edit().putBoolean("startAA", false).apply(); if (dlg[0] != null) dlg[0].dismiss(); toast(Lang.t("Na opstarten: launcher", "After start-up: launcher")); }),
                 new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
         row3.addView(menuButton(R.drawable.ic_aa, (startAA ? "● " : "") + "ANDROID AUTO", d, v -> {
-            op.edit().putBoolean("startAA", true).apply(); if (dlg[0] != null) dlg[0].dismiss(); toast("Na opstarten: Android Auto"); }),
+            op.edit().putBoolean("startAA", true).apply(); if (dlg[0] != null) dlg[0].dismiss(); toast(Lang.t("Na opstarten: Android Auto", "After start-up: Android Auto")); }),
                 new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
         box.addView(row3);
 
-        box.addView(menuLabel("SYSTEEM", theme.accent, d));
+        box.addView(menuLabel(Lang.t("SYSTEEM", "SYSTEM"), theme.accent, d));
         LinearLayout row2 = new LinearLayout(this);
         row2.setOrientation(LinearLayout.HORIZONTAL);
-        row2.addView(menuButton(R.drawable.ic_update, "UPDATE ZOEKEN", d, v -> { if (dlg[0] != null) dlg[0].dismiss(); Updater.check(this, true); }),
+        row2.addView(menuButton(R.drawable.ic_update, Lang.t("UPDATE ZOEKEN", "CHECK UPDATE"), d, v -> { if (dlg[0] != null) dlg[0].dismiss(); Updater.check(this, true); }),
                 new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
         row2.addView(menuButton(R.drawable.ic_settings, "DEBUG", d, v -> { if (dlg[0] != null) dlg[0].dismiss(); startActivity(new Intent(this, DebugActivity.class)); }),
                 new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
-        row2.addView(menuButton(R.drawable.ic_apps, "SLUITEN", d, v -> { if (dlg[0] != null) dlg[0].dismiss(); }),
+        row2.addView(menuButton(R.drawable.ic_apps, Lang.t("SLUITEN", "CLOSE"), d, v -> { if (dlg[0] != null) dlg[0].dismiss(); }),
                 new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
         box.addView(row2);
 
@@ -463,7 +488,7 @@ public class MainActivity extends Activity {
     private void refreshTrip() {
         float km = store.tripKm();
         if (km < 0.05f) {
-            trip.setText("Rit: nog niet gereden");
+            trip.setText(Lang.t("Rit: nog niet gereden", "Trip: not driven yet"));
             return;
         }
         StringBuilder sb = new StringBuilder();
@@ -576,7 +601,7 @@ public class MainActivity extends Activity {
             am.dispatchMediaKeyEvent(new android.view.KeyEvent(t, t, android.view.KeyEvent.ACTION_UP, code, 0));
             CarLogger.note("mediatoets " + code + " verstuurd");
         } catch (Exception e) {
-            toast("Mediatoets mislukt: " + e.getMessage());
+            toast(Lang.t("Mediatoets mislukt: ", "Media key failed: ") + e.getMessage());
         }
     }
 
@@ -588,9 +613,9 @@ public class MainActivity extends Activity {
         if (!store.summaryPending() || (summaryDialog != null && summaryDialog.isShowing())) return;
         RetroCard card = new RetroCard(this, theme);
         card.setSizeDp(460, 400);
-        card.title = "RIT KLAAR";
+        card.title = Lang.t("RIT KLAAR", "TRIP DONE");
         card.rows = store.summaryRows();
-        card.hint = "TIK = OK";
+        card.hint = Lang.t("TIK = OK", "TAP = OK");
         summaryDialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar)
                 .setView(card)
                 .setOnCancelListener(d -> store.clearSummary())
@@ -608,7 +633,7 @@ public class MainActivity extends Activity {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
         } else {
-            toast(naam + " is niet geïnstalleerd");
+            toast(naam + Lang.t(" is niet geïnstalleerd", " is not installed"));
         }
     }
 
@@ -697,12 +722,12 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(pad, pad / 2, pad, 0);
 
-        final EditText liters = numberField("Liters getankt");
-        final EditText price = numberField("Prijs per liter (€)");
+        final EditText liters = numberField(Lang.t("Liters getankt", "Litres filled"));
+        final EditText price = numberField(Lang.t("Prijs per liter (€)", "Price per litre (€)"));
         if (store.price() > 0) price.setText(String.format(java.util.Locale.US, "%.3f", store.price()));
         price.setOnClickListener(v -> { price.setText(""); });
         final CheckBox full = new CheckBox(this);
-        full.setText("Tank is nu vol (57 l)");
+        full.setText(Lang.t("Tank is nu vol (57 l)", "Tank is now full (57 L)"));
         full.setTextSize(18);
 
         box.addView(liters);
@@ -711,22 +736,22 @@ public class MainActivity extends Activity {
         box.addView(keypad(liters, price));
 
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Tanken")
+                .setTitle(Lang.t("Tanken", "Refuel"))
                 .setView(box)
-                .setPositiveButton("Opslaan", new DialogInterface.OnClickListener() {
+                .setPositiveButton(Lang.t("Opslaan", "Save"), new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) {
                         float l = parse(liters.getText().toString());
                         float pr = parse(price.getText().toString());
                         if (!full.isChecked() && l <= 0) {
-                            toast("Vul liters in, of vink 'vol' aan");
+                            toast(Lang.t("Vul liters in, of vink 'vol' aan", "Enter litres, or tick 'full'"));
                             return;
                         }
                         store.fill(Math.max(0f, l), pr, full.isChecked());
-                        toast(full.isChecked() ? "Tank vol opgeslagen" : "Tankbeurt opgeslagen");
+                        toast(full.isChecked() ? Lang.t("Tank vol opgeslagen", "Full tank saved") : Lang.t("Tankbeurt opgeslagen", "Refuel saved"));
                         refresh();
                     }
                 })
-                .setNegativeButton("Annuleren", null)
+                .setNegativeButton(Lang.t("Annuleren", "Cancel"), null)
                 .show();
     }
 

@@ -113,11 +113,11 @@ public class TrackerService extends Service implements LocationListener {
         store = new Store(this);
 
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        NotificationChannel ch = new NotificationChannel(CHANNEL, "Ritregistratie", NotificationManager.IMPORTANCE_LOW);
+        NotificationChannel ch = new NotificationChannel(CHANNEL, Lang.t("Ritregistratie", "Trip logging"), NotificationManager.IMPORTANCE_LOW);
         nm.createNotificationChannel(ch);
         Notification n = new Notification.Builder(this, CHANNEL)
                 .setContentTitle("Optimus Launcher")
-                .setContentText("Ritregistratie actief")
+                .setContentText(Lang.t("Ritregistratie actief", "Trip logging active"))
                 .setSmallIcon(android.R.drawable.ic_menu_mylocation)
                 .setOngoing(true)
                 .build();
@@ -429,7 +429,7 @@ public class TrackerService extends Service implements LocationListener {
             android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, 2, open,
                     android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
             Notification n = new Notification.Builder(this, CHANNEL_SUM)
-                    .setContentTitle("Rit klaar")
+                    .setContentTitle(Lang.t("Rit klaar", "Trip done"))
                     .setContentText(store.summaryShort())
                     .setStyle(new Notification.BigTextStyle().bigText(store.summaryText()))
                     .setSmallIcon(android.R.drawable.ic_menu_directions)
@@ -550,8 +550,8 @@ public class TrackerService extends Service implements LocationListener {
         } else {
             float cost = store.tripCost();
             bubble.rows = new String[][]{
-                    {"RIT KM", String.format(us, "%.1f", tk)},
-                    {"GEM", String.format(us, "%.0f", store.tripAvgKmh())},
+                    {Lang.t("RIT KM", "TRIP KM"), String.format(us, "%.1f", tk)},
+                    {Lang.t("GEM", "AVG"), String.format(us, "%.0f", store.tripAvgKmh())},
                     {"MAX", String.format(us, "%.0f", store.tripMaxKmh())},
                     {"EURO", cost >= 0 ? String.format(us, "%.2f", cost) : "--"}};
             bubble.setSizeDp(250, 270);

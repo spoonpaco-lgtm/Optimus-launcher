@@ -9,7 +9,7 @@ public class RetroCard extends View {
     private final CockpitView painter;
     private final float d;
     public float wDp = 300, hDp = 200;
-    public String title, big, unit = "KM/U", side, sideLabel = "KM/L", hint;
+    public String title, big, unit = null, side, sideLabel = "KM/L", hint;
     public String[][] rows;
     public int titleCol, bigCol, sideCol, rowCol;
     public Theme theme;
@@ -40,7 +40,7 @@ public class RetroCard extends View {
     @Override protected void onDraw(Canvas c) {
         c.save();
         c.scale(d, d);
-        painter.paintCard(c, wDp, hDp, title, titleCol, big, unit, bigCol, side, sideLabel, sideCol, rows, rowCol, hint);
+        painter.paintCard(c, wDp, hDp, title, titleCol, big, unit != null ? unit : Lang.t("KM/U", "KM/H"), bigCol, side, sideLabel, sideCol, rows, rowCol, hint);
         c.restore();
     }
 }

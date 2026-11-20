@@ -18,6 +18,7 @@ public class OptimusApp extends Application {
     public void onCreate() {
         super.onCreate();
         Clock.init(this);
+        Lang.load(this);
         final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((thread, ex) -> {
             try (PrintWriter pw = new PrintWriter(new FileWriter(new File(getFilesDir(), CRASH_FILE), false))) {
