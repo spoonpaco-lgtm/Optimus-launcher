@@ -3,14 +3,22 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/bg"
-    android:paddingStart="20dp"
-    android:paddingEnd="20dp"
-    android:paddingTop="10dp"
-    android:paddingBottom="14dp">
+    android:background="#040405"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp">
 
-    <!-- Statusbalk -->
+    <!-- Retro LED-cockpit (alles getekend) -->
+    <nl.spoonpaco.optimuslauncher.CockpitView
+        android:id="@+id/cockpit"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Oude statusbalk (verborgen; logica blijft voor debug) -->
     <LinearLayout
+        android:visibility="gone"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -26,8 +34,9 @@
         <TextView android:id="@+id/st_tank" style="@style/Status" android:text="⛽ tank ?" />
     </LinearLayout>
 
-    <!-- Klok + snelheid -->
+    <!-- Oude klok + snelheid (verborgen) -->
     <LinearLayout
+        android:visibility="gone"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -85,6 +94,7 @@
 
     <!-- Ritregel -->
     <TextView
+        android:visibility="gone"
         android:id="@+id/trip"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -108,10 +118,12 @@
     <!-- Knoppen -->
     <GridLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:columnCount="4"
-        android:rowCount="2"
+        android:layout_height="100dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/key_tray"
+        android:padding="6dp"
+        android:columnCount="8"
+        android:rowCount="1"
         android:alignmentMode="alignBounds"
         android:useDefaultMargins="false">
 

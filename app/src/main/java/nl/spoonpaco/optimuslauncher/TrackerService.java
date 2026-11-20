@@ -21,6 +21,8 @@ public class TrackerService extends Service implements LocationListener {
 
     /** Laatste snelheid in km/u; -1 = nog geen fix. */
     public static volatile float speedKmh = -1f;
+    /** Rijrichting in graden (GPS-koers), -1 = nog onbekend. */
+    public static volatile float bearing = -1f;
     /** Tijdstip van de laatste GPS-fix (ms). */
     public static volatile long lastFixTime = 0L;
     /** false als de tablet geen GPS-provider heeft. */
@@ -342,6 +344,7 @@ public class TrackerService extends Service implements LocationListener {
         lastFixTime = now;
         float kmh = loc.hasSpeed() ? loc.getSpeed() * 3.6f : 0f;
         speedKmh = kmh;
+        if (loc.hasBearing() && kmh >= MOVING_KMH) bearing = loc.getBearing();
         lastAccuracy = loc.hasAccuracy() ? loc.getAccuracy() : -1f;
 
         if (now - lastGpsNote >= 5000) {

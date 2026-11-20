@@ -82,6 +82,12 @@ public class MainActivity extends Activity {
         stPhone = findViewById(R.id.st_phone);
         stLog = findViewById(R.id.st_log);
         stTank = findViewById(R.id.st_tank);
+        cockpit = findViewById(R.id.cockpit);
+        cockpit.listener = new CockpitView.Listener() {
+            @Override public void onSpeedTap() { toggleOverlay(); }
+            @Override public void onClockLongPress() { startActivity(new Intent(MainActivity.this, DebugActivity.class)); }
+            @Override public void onTankTap() { showFuelDialog(); }
+        };
 
         wireApp(R.id.btn_aa, PKG_AA, "Android Auto (CarLetter)");
         wireApp(R.id.btn_offline, "app.organicmaps", "Organic Maps");
@@ -209,6 +215,7 @@ public class MainActivity extends Activity {
 
         refreshStatus(fresh);
         refreshTrip();
+        refreshCockpit(fresh);
         maybeShowSummary();
         updateOfflineButton();
     }
@@ -246,6 +253,31 @@ public class MainActivity extends Activity {
             int col = range < 60 ? R.color.bad : range < 120 ? R.color.warn : R.color.fg_dim;
             setStatus(stTank, col, String.format(NL, "⛽ ~%d km  (%.0f l)", range, store.tankLiters()));
         }
+    }
+
+    private void refreshCockpit(boolean fresh) {
+        CockpitView c = cockpit;
+        c.now = Clock.now();
+        c.speed = fresh ? Math.round(TrackerService.speedKmh) : -1;
+        c.sats = TrackerService.satsUsed;
+        c.heading = TrackerService.bearing;
+        c.tripKm = store.tripKm();
+        c.tripAvg = store.tripAvgKmh();
+        c.tripMax = store.tripMaxKmh();
+        c.tripL = store.tripLiters();
+        c.tripCost = store.tripCost();
+        c.tripMinutes = Math.round(store.tripMovingH() * 60f);
+        c.l100 = c.tripKm >= 0.5f ? c.tripL / c.tripKm * 100f : -1f;
+        c.rangeKm = store.rangeKm();
+        c.tankL = store.tankLiters();
+        c.volts = CarSignals.volts > 0 && System.currentTimeMillis() - CarSignals.voltsTime < 60_000L ? CarSignals.volts : -1f;
+        c.lContact = CarSignals.contact == 1 || (CarSignals.contact < 0 && c.volts > 0);
+        c.lMotor = CarSignals.engineRunning();
+        c.lLicht = CarSignals.lights == 1;
+        c.lHandrem = CarSignals.handbrake == 1;
+        c.lAuto = aaSeenRecently;
+        c.lLog = CarLogger.state == 2;
+        c.invalidate();
     }
 
     private void refreshTrip() {
@@ -318,6 +350,7 @@ public class MainActivity extends Activity {
 
     private long lastArpCheck = 0L;
     private boolean aaSeen = false;
+    private boolean aaSeenRecently = false;
 
     /** Knop "Offline navigeren" alleen tonen als Android Auto 30 s na opstart/wakker niet verbonden is. */
     private void updateOfflineButton() {
@@ -327,7 +360,8 @@ public class MainActivity extends Activity {
         if (since < 30_000L || TrackerService.lastWakeElapsed == 0L) aaSeen = false;
         if (now - lastArpCheck > 5_000L) {
             lastArpCheck = now;
-            if (aaClientPresent()) aaSeen = true;
+            aaSeenRecently = aaClientPresent();
+            if (aaSeenRecently) aaSeen = true;
         }
         boolean show = since >= 30_000L && !aaSeen && installed("app.organicmaps");
         int vis = show ? android.view.View.VISIBLE : android.view.View.GONE;
@@ -502,6 +536,7 @@ public class MainActivity extends Activity {
     }
 
     private static boolean aaAutoStarted = false;
+    private CockpitView cockpit;
 
     /** Staat de launcher op het scherm? (dan geen zwevend venster nodig) */
     public static volatile boolean visible = false;
