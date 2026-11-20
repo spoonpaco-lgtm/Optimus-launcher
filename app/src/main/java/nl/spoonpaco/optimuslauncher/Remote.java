@@ -45,6 +45,10 @@ import java.util.Locale;
  */
 public final class Remote {
     private static WeakReference<Activity> top = new WeakReference<>(null);
+    private static volatile int resumed = 0;
+
+    /** Staat er een scherm van de launcher-app vooraan (launcher, rittenlog, debug, ...)? */
+    public static boolean ownScreenVisible() { return resumed > 0; }
     private static final Handler H = new Handler(Looper.getMainLooper());
 
     private Remote() { }
@@ -52,10 +56,13 @@ public final class Remote {
     /** In OptimusApp aanroepen: houdt bij welke activity bovenaan staat. */
     public static void install(Application app) {
         app.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
-            @Override public void onActivityResumed(Activity a) { if (!(a instanceof RemoteActivity)) top = new WeakReference<>(a); }
+            @Override public void onActivityResumed(Activity a) {
+                if (a instanceof RemoteActivity) return;
+                top = new WeakReference<>(a); resumed++;
+            }
             @Override public void onActivityCreated(Activity a, Bundle b) { }
             @Override public void onActivityStarted(Activity a) { }
-            @Override public void onActivityPaused(Activity a) { }
+            @Override public void onActivityPaused(Activity a) { if (!(a instanceof RemoteActivity)) resumed = Math.max(0, resumed - 1); }
             @Override public void onActivityStopped(Activity a) { }
             @Override public void onActivitySaveInstanceState(Activity a, Bundle b) { }
             @Override public void onActivityDestroyed(Activity a) { }

@@ -549,7 +549,7 @@ public class TrackerService extends Service implements LocationListener {
 
     private void updateOverlay() {
         boolean want = android.provider.Settings.canDrawOverlays(this)
-                && !MainActivity.visible
+                && !MainActivity.visible && !Remote.ownScreenVisible()
                 && store.overlayEnabled();
         if (!want) { removeBubble(); return; }
         if (bubble == null) addBubble();

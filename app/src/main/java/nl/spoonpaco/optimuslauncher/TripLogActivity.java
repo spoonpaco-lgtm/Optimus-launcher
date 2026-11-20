@@ -1,25 +1,21 @@
 package nl.spoonpaco.optimuslauncher;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RectF;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.text.InputType;
-import android.text.method.DigitsKeyListener;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
-import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ListView;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import java.text.SimpleDateFormat;
@@ -29,28 +25,32 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/** Rittenlog: lijst met ritten, route van de gekozen rit, onderhoud, export naar USB. */
+/** Rittenlog in cockpitstijl: lijst met ritten, route van de gekozen rit, werkrit-markering, scores, export. */
 public class TripLogActivity extends Activity {
     private Store store;
     private Theme theme;
+    private CockpitView pt;
     private float d;
     private List<TripLog.Trip> trips = new ArrayList<>();
     private int sel = 0;
     private RouteView route;
-    private TextView details, maint;
+    private RetroUi.Text details, workTotal;
+    private RetroUi.Btn workBtn;
     private BaseAdapter adapter;
-    private LinearLayout toggleRow;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         store = new Store(this);
         theme = Theme.byId(getSharedPreferences("optimus", MODE_PRIVATE).getString("theme", "led"));
+        pt = RetroUi.painter(this, theme);
         d = getResources().getDisplayMetrics().density;
         int pad = (int) (14 * d);
 
+        FrameLayout frame = new FrameLayout(this);
+        frame.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFF0A0A0D);
+        root.setBackground(new RetroUi.Panel(pt, RetroUi.Panel.BG, 0, d));
         root.setPadding(pad, pad, pad, pad);
 
         // ---- bovenbalk ----
@@ -59,15 +59,17 @@ public class TripLogActivity extends Activity {
         top.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout titles = new LinearLayout(this);
         titles.setOrientation(LinearLayout.VERTICAL);
-        titles.addView(label(Lang.t("RITTENLOG", "TRIP LOG"), theme.key, 20));
-        workTotal = label("", theme.trip, 12);
+        RetroUi.Text title = new RetroUi.Text(this, pt, 22, theme.key);
+        title.set(Lang.t("RITTENLOG", "TRIP LOG"));
+        titles.addView(title);
+        workTotal = new RetroUi.Text(this, pt, 11, theme.trip);
         titles.addView(workTotal);
         top.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        toggleRow = new LinearLayout(this);
-        top.addView(toggleRow);
-        top.addView(choice("HIGH SCORES", false, v -> Dialogs.highscores(this, theme)), btnLp(140));
-        top.addView(choice(Lang.t("NAAR USB", "TO USB"), false, v -> Dialogs.export(this)), btnLp(130));
-        top.addView(choice(Lang.t("SLUITEN", "CLOSE"), true, v -> finish()), btnLp(120));
+        workBtn = btn(Lang.t("MARKEER ALS WERKRIT", "MARK AS WORK TRIP"), false, v -> toggleWork());
+        top.addView(workBtn, btnLp(250));
+        top.addView(btn("HIGH SCORES", false, v -> Dialogs.highscores(this, theme)), btnLp(170));
+        top.addView(btn(Lang.t("NAAR USB", "TO USB"), false, v -> Dialogs.export(this)), btnLp(140));
+        top.addView(btn(Lang.t("SLUITEN", "CLOSE"), true, v -> finish()), btnLp(140));
         root.addView(top);
 
         // ---- lijst + route ----
@@ -77,37 +79,22 @@ public class TripLogActivity extends Activity {
 
         ListView list = new ListView(this);
         list.setDivider(null);
-        list.setBackground(panel());
-        list.setPadding((int) (6 * d), (int) (6 * d), (int) (6 * d), (int) (6 * d));
+        list.setSelector(new android.graphics.drawable.ColorDrawable(0));
+        list.setBackground(new RetroUi.Panel(pt, RetroUi.Panel.BEZEL, 0, d));
+        list.setPadding((int) (10 * d), (int) (12 * d), (int) (10 * d), (int) (12 * d));
+        list.setClipToPadding(false);
         adapter = new BaseAdapter() {
             @Override public int getCount() { return trips.size(); }
             @Override public Object getItem(int i) { return trips.get(i); }
             @Override public long getItemId(int i) { return i; }
             @Override public View getView(int i, View cv, ViewGroup parent) {
-                TextView t = cv instanceof TextView ? (TextView) cv : new TextView(TripLogActivity.this);
-                TripLog.Trip tr = trips.get(i);
-                SimpleDateFormat df = new SimpleDateFormat("EEE d MMM  HH:mm", Lang.locale());
-                t.setText((WorkLog.isWork(TripLogActivity.this, tr.id) ? "● " + Lang.t("WERK", "WORK") + "  " : "")
-                        + df.format(new Date(tr.start)).replace(".", "").toUpperCase(Lang.locale())
-                        + String.format(Locale.US, "\n%.1f km · %d min", tr.km, tr.minutes)
-                        + (tr.cost >= 0 ? String.format(Locale.US, " · € %.2f", tr.cost) : "")
-                        + (tr.score >= 0 ? " · score " + tr.score : ""));
-                t.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
-                t.setTextSize(14);
-                t.setLetterSpacing(0.06f);
-                t.setPadding((int) (12 * d), (int) (8 * d), (int) (12 * d), (int) (8 * d));
-                boolean on = i == sel;
-                t.setTextColor(on ? theme.key : 0xFF9A9AA6);
-                GradientDrawable g = new GradientDrawable();
-                g.setCornerRadius(6 * d);
-                g.setColor(on ? ((theme.key & 0x00FFFFFF) | 0x22000000) : 0x00000000);
-                if (on) g.setStroke((int) (2 * d), theme.key);
-                t.setBackground(g);
-                return t;
+                Row r = cv instanceof Row ? (Row) cv : new Row(TripLogActivity.this);
+                r.bind(trips.get(i), i == sel);
+                return r;
             }
         };
         list.setAdapter(adapter);
-        list.setOnItemClickListener((p, v, i, id) -> { sel = i; adapter.notifyDataSetChanged(); showTrip(); buildToggle(); });
+        list.setOnItemClickListener((p, v, i, id) -> { sel = i; adapter.notifyDataSetChanged(); showTrip(); });
         body.addView(list, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.38f));
 
         LinearLayout right = new LinearLayout(this);
@@ -115,27 +102,20 @@ public class TripLogActivity extends Activity {
         right.setPadding((int) (12 * d), 0, 0, 0);
         route = new RouteView(this);
         right.addView(route, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        details = label("", 0xFFECEFF4, 15);
-        details.setLetterSpacing(0.04f);
-        details.setPadding((int) (4 * d), (int) (8 * d), 0, (int) (6 * d));
-        right.addView(details);
-
-        LinearLayout mrow = new LinearLayout(this);
-        mrow.setOrientation(LinearLayout.HORIZONTAL);
-        mrow.setGravity(Gravity.CENTER_VERTICAL);
-        mrow.setBackground(panel());
-        mrow.setPadding((int) (12 * d), (int) (8 * d), (int) (8 * d), (int) (8 * d));
-        maint = label("", theme.accent, 14);
-        maint.setLetterSpacing(0.04f);
-        mrow.addView(maint, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        mrow.addView(choice(Lang.t("HIER OPSLAAN", "SAVE HERE"), false, v -> Dialogs.saveHere(this, this::showTrip)), btnLp(130));
-        mrow.addView(choice(Lang.t("LOCATIES", "PLACES"), false, v -> Dialogs.locationList(this, this::showTrip)), btnLp(110));
-        mrow.addView(choice(Lang.t("ONDERHOUD", "SERVICE"), false, v -> Dialogs.maintenance(this, store, this::showMaintenance)), btnLp(120));
-        right.addView(mrow);
-
+        details = new RetroUi.Text(this, pt, 12, CockpitView.TXT);
+        LinearLayout detBox = new LinearLayout(this);
+        detBox.setBackground(new RetroUi.Panel(pt, RetroUi.Panel.WINDOW, theme.key, d));
+        detBox.setPadding((int) (16 * d), (int) (8 * d), (int) (16 * d), (int) (8 * d));
+        detBox.addView(details, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dl.topMargin = (int) (10 * d);
+        right.addView(detBox, dl);
         body.addView(right, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.62f));
         root.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        setContentView(root);
+
+        frame.addView(root, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        frame.addView(new RetroUi.Scanlines(this, pt), new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        setContentView(frame);
     }
 
     @Override protected void onResume() {
@@ -144,128 +124,89 @@ public class TripLogActivity extends Activity {
         if (sel >= trips.size()) sel = 0;
         adapter.notifyDataSetChanged();
         showTrip();
-        showMaintenance();
-        buildToggle();
-        updateWorkTotal();
         Geo.fillMissing(this);
     }
 
-    /** Knop "WERKRIT" voor de gekozen rit: achteraf markeren of de markering weghalen. */
-    private void buildToggle() {
-        toggleRow.removeAllViews();
-        if (trips.isEmpty()) return;
-        final TripLog.Trip t = trips.get(sel);
-        final boolean work = WorkLog.isWork(this, t.id);
-        toggleRow.addView(choice(work ? "● " + Lang.t("WERKRIT", "WORK TRIP") : Lang.t("MARKEER ALS WERKRIT", "MARK AS WORK TRIP"), work, v -> {
-            WorkLog.setWork(this, t.id, !work);
-            Toast.makeText(this, !work ? Lang.t("Rit staat nu in spoonpaco-ritten", "Trip added to spoonpaco-ritten")
-                    : Lang.t("Rit uit spoonpaco-ritten gehaald", "Trip removed from spoonpaco-ritten"), Toast.LENGTH_SHORT).show();
-            adapter.notifyDataSetChanged(); buildToggle(); updateWorkTotal();
-        }), btnLp(210));
-    }
-
-    private TextView workTotal;
-
-    private void updateWorkTotal() {
-        float km = WorkLog.kmThisYear(this);
-        int y = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR);
-        workTotal.setText(String.format(Locale.GERMANY, Lang.t("ZAKELIJK %d: %.0f KM = € %.2f", "BUSINESS %d: %.0f KM = € %.2f"),
-                y, km, km * WorkLog.ratePerKm(y)));
-    }
-
-    private void showTrip() {
-        if (trips.isEmpty()) {
-            route.set(null, Lang.t("NOG GEEN RITTEN", "NO TRIPS YET"));
-            details.setText(Lang.t("Een rit wordt opgeslagen zodra hij is afgesloten (contact uit of 10 min stilstand).",
-                    "A trip is saved when it ends (ignition off or 10 min stopped)."));
-            return;
-        }
-        TripLog.Trip t = trips.get(sel);
-        route.set(TripLog.route(this, t.id), null);
-        SimpleDateFormat day = new SimpleDateFormat("EEEE d MMMM", Lang.locale());
-        SimpleDateFormat hm = new SimpleDateFormat("HH:mm", Locale.US);
-        StringBuilder s = new StringBuilder();
-        s.append(day.format(new Date(t.start))).append("   ").append(hm.format(new Date(t.start)))
-                .append(" → ").append(hm.format(new Date(t.end))).append(String.format(Locale.US, "  (%d min)\n", t.minutes));
-        s.append(String.format(Locale.US, "%.1f km   ·   %s %.0f   ·   max %.0f km/%s\n", t.km,
-                Lang.t("gem", "avg"), t.avg, t.max, Lang.t("u", "h")));
-        s.append(String.format(Locale.US, "~%.2f l", t.liters));
-        if (t.km > 0.5f && t.liters > 0.01f) s.append(String.format(Locale.US, "   ·   %.1f km/l", t.km / t.liters));
-        if (t.cost >= 0) s.append(String.format(Locale.US, "   ·   € %.2f", t.cost));
-        if (t.score >= 0) s.append("   ·   SCORE ").append(t.score);
-        s.append("\n").append(Lang.t("Van: ", "From: ")).append(WorkLog.address(this, t.sLat, t.sLon))
-         .append("\n").append(Lang.t("Naar: ", "To: ")).append(WorkLog.address(this, t.eLat, t.eLon));
-        if (t.odoStart > 0 && t.odoEnd > 0)
-            s.append(String.format(Locale.US, "\n%s %,d → %,d", Lang.t("km-stand", "odometer"), t.odoStart, t.odoEnd));
-        details.setText(s.toString());
-    }
-
-    private void showMaintenance() {
-        long now = Clock.now();
-        StringBuilder s = new StringBuilder();
-        int odo = store.odometer();
-        s.append(Lang.t("KM-STAND  ", "ODOMETER  ")).append(odo < 0 ? Lang.t("NIET INGESTELD — nodig voor werkritten", "NOT SET — needed for work trips") : String.format(Locale.US, "~%,d", odo));
-        int k = store.oilKmLeft(), od = store.oilDaysLeft(now), a = store.apkDaysLeft(now);
-        s.append(Lang.t("\nOLIE  ", "\nOIL  "));
-        if (k == Integer.MIN_VALUE && od == Integer.MIN_VALUE) s.append(Lang.t("niet ingesteld", "not set"));
-        else {
-            if (k != Integer.MIN_VALUE) s.append(k >= 0 ? String.format(Locale.US, Lang.t("over %,d km", "in %,d km"), k)
-                    : String.format(Locale.US, Lang.t("%,d km te laat!", "%,d km overdue!"), -k));
-            if (od != Integer.MIN_VALUE) s.append(k != Integer.MIN_VALUE ? " / " : "").append(days(od));
-        }
-        s.append(Lang.t("\nAPK  ", "\nMOT  ")).append(a == Integer.MIN_VALUE ? Lang.t("niet ingesteld", "not set")
-                : days(a) + "  (" + new SimpleDateFormat("dd-MM-yyyy", Locale.US).format(new Date(store.apkDate())) + ")");
-        maint.setText(s.toString());
-        maint.setTextColor(store.serviceDue(now) || odo < 0 ? CockpitView.WR : theme.accent);
-    }
-
-    private static String days(int n) {
-        return n >= 0 ? String.format(Locale.US, Lang.t("over %d dagen", "in %d days"), n)
-                : String.format(Locale.US, Lang.t("%d dagen te laat!", "%d days overdue!"), -n);
-    }
-
-    // ---------- stijl ----------
-
-    private TextView label(String t, int col, float size) {
-        TextView v = new TextView(this);
-        v.setText(t);
-        v.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
-        v.setLetterSpacing(0.15f);
-        v.setTextSize(size);
-        v.setTextColor(col);
-        v.setShadowLayer(8f, 0, 0, (col & 0x00FFFFFF) | 0x66000000);
-        return v;
-    }
-
-    private GradientDrawable panel() {
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xFF15151A, 0xFF0C0C0F});
-        g.setCornerRadius(8 * d);
-        g.setStroke((int) d, 0xFF2C2C35);
-        return g;
+    private RetroUi.Btn btn(String text, boolean on, View.OnClickListener l) {
+        RetroUi.Btn b = new RetroUi.Btn(this, pt, text, on, theme.key);
+        b.size = 14;
+        b.setOnClickListener(l);
+        return b;
     }
 
     private LinearLayout.LayoutParams btnLp(int wDp) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams((int) (wDp * d), (int) (44 * d));
-        lp.setMargins((int) (5 * d), 0, 0, 0);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams((int) (wDp * d), (int) (54 * d));
+        lp.setMargins((int) (8 * d), 0, 0, 0);
         return lp;
     }
 
-    private View choice(String text, boolean on, View.OnClickListener l) {
-        TextView b = new TextView(this);
-        b.setText(text);
-        b.setGravity(Gravity.CENTER);
-        b.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
-        b.setLetterSpacing(0.12f);
-        b.setTextSize(13);
-        b.setTextColor(on ? theme.key : 0xFF8E8E9A);
-        GradientDrawable g = new GradientDrawable();
-        g.setCornerRadius(6 * d);
-        g.setColor(on ? ((theme.key & 0x00FFFFFF) | 0x26000000) : 0xFF141418);
-        g.setStroke((int) ((on ? 2 : 1) * d), on ? theme.key : 0xFF2C2C35);
-        b.setBackground(g);
-        b.setClickable(true);
-        b.setOnClickListener(l);
-        return b;
+    private void toggleWork() {
+        if (trips.isEmpty()) return;
+        TripLog.Trip t = trips.get(sel);
+        boolean work = !WorkLog.isWork(this, t.id);
+        WorkLog.setWork(this, t.id, work);
+        Toast.makeText(this, work ? Lang.t("Rit staat nu in spoonpaco-ritten", "Trip added to spoonpaco-ritten")
+                : Lang.t("Rit uit spoonpaco-ritten gehaald", "Trip removed from spoonpaco-ritten"), Toast.LENGTH_SHORT).show();
+        adapter.notifyDataSetChanged();
+        showTrip();
+    }
+
+    private void showTrip() {
+        float km = WorkLog.kmThisYear(this);
+        int y = Calendar.getInstance().get(Calendar.YEAR);
+        workTotal.set(String.format(Locale.GERMANY, Lang.t("ZAKELIJK %d: %.0f KM = € %.2f", "BUSINESS %d: %.0f KM = € %.2f"),
+                y, km, km * WorkLog.ratePerKm(y)));
+        workBtn.setVisibility(trips.isEmpty() ? View.INVISIBLE : View.VISIBLE);
+        if (trips.isEmpty()) {
+            route.set(null, Lang.t("NOG GEEN RITTEN", "NO TRIPS YET"));
+            details.set(Lang.t("EEN RIT WORDT OPGESLAGEN ZODRA HIJ IS AFGESLOTEN\n(CONTACT UIT OF 10 MIN STILSTAND)",
+                    "A TRIP IS SAVED WHEN IT ENDS\n(IGNITION OFF OR 10 MIN STOPPED)"));
+            return;
+        }
+        TripLog.Trip t = trips.get(sel);
+        boolean work = WorkLog.isWork(this, t.id);
+        workBtn.set(work ? Lang.t("WERKRIT", "WORK TRIP") : Lang.t("MARKEER ALS WERKRIT", "MARK AS WORK TRIP"), work);
+        route.set(TripLog.route(this, t.id), null);
+        SimpleDateFormat day = new SimpleDateFormat("EEEE d MMMM", Lang.locale());
+        SimpleDateFormat hm = new SimpleDateFormat("HH:mm", Locale.US);
+        List<String> l = new ArrayList<>(); List<Integer> c = new ArrayList<>();
+        l.add(day.format(new Date(t.start)).toUpperCase(Lang.locale()) + "   " + hm.format(new Date(t.start)) + " - " + hm.format(new Date(t.end))
+                + String.format(Locale.US, "  (%d MIN)", t.minutes)); c.add(theme.key);
+        String eco = t.km > 0.5f && t.liters > 0.01f ? String.format(Locale.US, "   %.1f KM/L", t.km / t.liters) : "";
+        l.add(String.format(Locale.US, "%.1f KM   %s %.0f   MAX %.0f KM/%s   ~%.2f L%s%s%s", t.km, Lang.t("GEM", "AVG"), t.avg, t.max,
+                Lang.t("U", "H"), t.liters, eco, t.cost >= 0 ? String.format(Locale.US, "   € %.2f", t.cost) : "",
+                t.score >= 0 ? "   SCORE " + t.score : "")); c.add(CockpitView.TXT);
+        l.add(Lang.t("VAN: ", "FROM: ") + WorkLog.address(this, t.sLat, t.sLon)); c.add(0xFF9A9AA6);
+        l.add(Lang.t("NAAR: ", "TO: ") + WorkLog.address(this, t.eLat, t.eLon)); c.add(0xFF9A9AA6);
+        if (t.odoStart > 0 && t.odoEnd > 0) { l.add(String.format(Locale.GERMANY, Lang.t("KM-STAND %,d - %,d", "ODOMETER %,d - %,d"), t.odoStart, t.odoEnd)); c.add(0xFF9A9AA6); }
+        else if (store.odometer() < 0) { l.add(Lang.t("KM-STAND NIET INGESTELD: MENU > AUTO", "ODOMETER NOT SET: MENU > CAR")); c.add(CockpitView.WR); }
+        int[] ci = new int[c.size()]; for (int i = 0; i < ci.length; i++) ci[i] = c.get(i);
+        details.set(l.toArray(new String[0]), ci);
+    }
+
+    /** Eén rit in de lijst: display (gekozen) of donker, met lampje WERK. */
+    private class Row extends View {
+        TripLog.Trip t; boolean on;
+        Row(Context c) { super(c); }
+        void bind(TripLog.Trip t, boolean on) { this.t = t; this.on = on; invalidate(); }
+        @Override protected void onMeasure(int ws, int hs) { setMeasuredDimension(MeasureSpec.getSize(ws), (int) (66 * d)); }
+        @Override protected void onDraw(Canvas c) {
+            if (t == null) return;
+            c.save(); c.scale(d, d);
+            float w = getWidth() / d;
+            RectF r = new RectF(2, 3, w - 2, 61);
+            if (on) pt.uiWindow(c, r, theme.key);
+            boolean work = WorkLog.isWork(getContext(), t.id);
+            pt.uiLamp(c, 22, 32, 8, CockpitView.WG, work);
+            SimpleDateFormat df = new SimpleDateFormat("EEE d MMM  HH:mm", Lang.locale());
+            pt.uiText(c, df.format(new Date(t.start)).replace(".", "").toUpperCase(Lang.locale()) + (work ? Lang.t("   WERK", "   WORK") : ""),
+                    42, 27, 13, on ? theme.key : 0xFFB0B0BA, Paint.Align.LEFT);
+            pt.uiText(c, String.format(Locale.US, "%.1f KM   %d MIN", t.km, t.minutes)
+                    + (t.cost >= 0 ? String.format(Locale.US, "   € %.2f", t.cost) : "")
+                    + (t.score >= 0 ? "   SCORE " + t.score : ""), 42, 48, 10, on ? CockpitView.TXT : 0xFF7A7A86, Paint.Align.LEFT);
+            if (on) pt.uiGlass(c, r);
+            c.restore();
+        }
     }
 
     // ---------- routekaartje in retrostijl ----------
@@ -275,7 +216,7 @@ public class TripLogActivity extends Activity {
         private String msg;
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-        RouteView(Context c) { super(c); setLayerType(LAYER_TYPE_SOFTWARE, null); setBackground(panel()); }
+        RouteView(Context c) { super(c); setBackground(new RetroUi.Panel(pt, RetroUi.Panel.WINDOW, theme.key, d)); }
 
         void set(List<double[]> points, String message) { pts = points; msg = message; invalidate(); }
 
