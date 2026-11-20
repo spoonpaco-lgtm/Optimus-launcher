@@ -492,7 +492,7 @@ public class TrackerService extends Service implements LocationListener {
             if (dt > 0f && dt < 5f) {
                 if (!moving) {
                     // stationair alleen als de motor (vermoedelijk) draait
-                    if (!store.tripEnded() && !parked) store.addFuel(Store.IDLE_LPH * dt / 3600f);
+                    if (!store.tripEnded() && !parked && CarSignals.engineRunning()) store.addFuel(Store.IDLE_LPH * dt / 3600f);
                 } else {
                     float v1 = last.hasSpeed() ? last.getSpeed() : 0f;
                     float v2 = loc.getSpeed();
