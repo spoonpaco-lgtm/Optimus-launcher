@@ -48,7 +48,7 @@ public class MenuView extends View {
     private final List<Object[]> hits = new ArrayList<>(); // {RectF, Runnable}
 
     private static final String[][] TABS = {
-            {"THEMA", "THEME", "kleuren & stijl", "colours & style"},
+            {"THEMA", "THEME", "kleuren + stijl", "colours + style"},
             {"AUTO", "CAR", "km-stand · onderhoud · accu", "odometer · service · battery"},
             {"RITTEN", "TRIPS", "rittenlog · locaties · scores", "trip log · places · scores"},
             {"INSTELLINGEN", "SETTINGS", "taal · opstarten · venster", "language · start-up · overlay"},
@@ -216,10 +216,11 @@ public class MenuView extends View {
         int lv = BatteryHealth.level;
         int lc = lv == 2 ? CockpitView.WR : lv == 1 ? CockpitView.WA : CockpitView.WG;
         boolean known = BatteryHealth.last("rest") > 0;
-        pt.uiLamp(c, x0 + 108, 311, 11, lc, known);
-        pt.uiText(c, !known ? Lang.t("NOG GEEN METING", "NO DATA YET") : lv == 0 ? Lang.t("GOED", "GOOD") : lv == 1 ? Lang.t("LET OP", "WATCH") : Lang.t("SLECHT", "BAD"),
-                x0 + 130, 316, 14, known ? lc : 0xFF6C6C78, Paint.Align.LEFT);
-        if (lv > 0) pt.uiText(c, BatteryHealth.reason.toUpperCase(Locale.ROOT), x0 + 260, 316, 9, lc, Paint.Align.LEFT);
+        float lx = x0 + pt.uiTextWidth(Lang.t("ACCU", "BATTERY"), 13) + 28;
+        pt.uiLamp(c, lx, 311, 11, lc, known);
+        String st = !known ? Lang.t("NOG GEEN METING", "NO DATA YET") : lv == 0 ? Lang.t("GOED", "GOOD") : lv == 1 ? Lang.t("LET OP", "WATCH") : Lang.t("SLECHT", "BAD");
+        pt.uiText(c, st, lx + 22, 316, 14, known ? lc : 0xFF6C6C78, Paint.Align.LEFT);
+        if (lv > 0) pt.uiText(c, BatteryHealth.reason.toUpperCase(Locale.ROOT), lx + 40 + pt.uiTextWidth(st, 14), 316, 9, lc, Paint.Align.LEFT);
         String[][] v = {{Lang.t("RUST", "REST"), "rest"}, {"START", "crank"}, {Lang.t("LADEN", "CHARGE"), "charge"}};
         float bw = (x1 - x0 - 40) / 3f;
         for (int i = 0; i < 3; i++) {

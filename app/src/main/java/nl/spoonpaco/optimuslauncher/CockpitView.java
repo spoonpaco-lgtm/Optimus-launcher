@@ -642,6 +642,15 @@ public class CockpitView extends View {
     // Zelfde bezels, displays, scanlines en lampjes als de cockpit, zodat alles één stijl heeft.
 
     public boolean uiLeds() { return leds; }
+
+    /** Breedte van tekst zoals text() hem tekent (ook in Old-skool-lampjes). */
+    public float uiTextWidth(String t, float size) {
+        if (leds) return DotFont.width(t, size * 0.19f);
+        p.setTypeface(label); p.setTextSize(size); p.setLetterSpacing(0.18f);
+        float w = p.measureText(t);
+        p.setLetterSpacing(0f);
+        return w;
+    }
     public int uiRed() { return RED; } public int uiAmb() { return AMB; } public int uiGrn() { return GRN; }
     public int uiBlu() { return BLU; } public int uiYel() { return YEL; }
 
@@ -737,8 +746,11 @@ public class CockpitView extends View {
             c.drawRoundRect(r, 7, 7, p); p.setStyle(Paint.Style.FILL);
         }
         lampAt(c, r.left + 26, r.centerY(), 11, key, on);
+        c.save();
+        c.clipRect(r.left + 4, r.top + 2, r.right - 8, r.bottom - 2);   // lange teksten (Old-skool) niet buiten het tabblad
         text(c, title, r.left + 50, r.top + r.height() * 0.46f, 20, on ? key : 0xFFA0A0AA);
-        text(c, sub, r.left + 50, r.top + r.height() * 0.78f, 10, on ? dark(key, 0.8f) : 0xFF5F5F69);
+        text(c, sub, r.left + 50, r.top + r.height() * 0.78f, leds ? 8 : 10, on ? dark(key, 0.8f) : 0xFF5F5F69);
+        c.restore();
         if (on && !leds) glass(c, r);
     }
 
