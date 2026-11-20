@@ -242,7 +242,35 @@ public class TrackerService extends Service implements LocationListener {
     /** Tijdstip (elapsedRealtime) van laatste opstart of wakker worden; launcher gebruikt dit voor "Offline navigeren". */
     public static volatile long lastWakeElapsed = 0L;
 
+    private long lastAnim = 0L;
+    private long contactOffAt = 0L;
+
+    /** Opstartfilmpje ("Optimus Black, Ready"), daarna gaat dat zelf door naar Android Auto. Max 1x per 2 min. */
+    private void playWakeAnim(String why) {
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (lastAnim > 0 && now - lastAnim < 120_000L) return;
+        lastAnim = now;
+        PowerLog.log("opstartfilmpje: " + why);
+        ui.postDelayed(() -> {
+            try {
+                Intent w = new Intent(this, WakeAnimActivity.class);
+                w.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+                startActivity(w);
+            } catch (Exception e) { PowerLog.log("opstartfilmpje mislukt: " + e.getMessage()); }
+        }, 300L);
+    }
+
     private void onCarSignal(String name, int v) {
+        // Contact aan na minstens 1 min uit -> opstartfilmpje (tablet slaapt niet altijd echt, dus niet alleen op scherm/slaap vertrouwen)
+        if (name.equals("contact")) {
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (v == 0) contactOffAt = now;
+            else if (v == 1 && contactOffAt > 0 && now - contactOffAt > 60_000L) {
+                playWakeAnim("contact aan na " + PowerLog.dur(now - contactOffAt));
+                lastWakeElapsed = now;
+                restartGps("contact aan");
+            }
+        }
         PowerLog.log(name + " -> " + v + (CarSignals.volts > 0 ? String.format(java.util.Locale.US, " (%.2f V)", CarSignals.volts) : ""));
         if (name.equals("handrem") && v == 1 && CarSignals.handbrake >= 0 && speedKmh < MOVING_KMH
                 && !store.tripEnded() && store.tripKm() >= MIN_TRIP_KM) {
@@ -272,16 +300,7 @@ public class TrackerService extends Service implements LocationListener {
         fixSinceWake = false;
         lastMoveElapsed = wakeAt;
         restartGps("wakker");
-        if (offMs < 0 || offMs > 2L * 60L * 1000L) {
-            // Opstartfilmpje, daarna gaat dat zelf door naar Android Auto
-            ui.postDelayed(() -> {
-                try {
-                    Intent w = new Intent(this, WakeAnimActivity.class);
-                    w.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION);
-                    startActivity(w);
-                } catch (Exception e) { PowerLog.log("opstartfilmpje mislukt: " + e.getMessage()); }
-            }, 300L);
-        }
+        if (offMs < 0 || offMs > 2L * 60L * 1000L) playWakeAnim("wakker na " + PowerLog.dur(Math.max(0, offMs)));
     }
 
     private void restartGps(String why) {
