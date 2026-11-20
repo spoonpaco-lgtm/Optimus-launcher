@@ -85,6 +85,7 @@ public class MainActivity extends Activity {
         cockpit = findViewById(R.id.cockpit);
         applyTheme(Theme.byId(getSharedPreferences("optimus", MODE_PRIVATE).getString("theme", "led")));
         handler.postDelayed(() -> { if (scanner != null) scanner.sweepOnce(); }, 600);
+        instance = this;
         handleMenuExtra(getIntent());
         cockpit.listener = new CockpitView.Listener() {
             @Override public void onSpeedTap() { toggleOverlay(); }
@@ -860,16 +861,70 @@ public class MainActivity extends Activity {
     /** Staat de launcher op het scherm? (dan geen zwevend venster nodig) */
     public static volatile boolean visible = false;
 
-    /** Extra "menuTab" (0-4): menu op dat tabblad openen (handig voor testen via adb). */
+    /** Laatst gemaakte MainActivity (voor de afstandsbediening). */
+    static MainActivity instance;
+
+    /** Intent van de afstandsbediening (of oude extra "menuTab") afhandelen. */
     private void handleMenuExtra(Intent i) {
-        if (i == null || !i.hasExtra("menuTab")) return;
-        final int t = i.getIntExtra("menuTab", 0);
-        i.removeExtra("menuTab");
-        handler.postDelayed(() -> {
-            if (menuDlg != null && menuDlg.isShowing()) menuDlg.dismiss();
-            showMenu();
-            menuView.setTab(Math.max(0, Math.min(4, t)));
-        }, 400);
+        if (i == null) return;
+        if (i.hasExtra("menuTab")) {
+            final int t = i.getIntExtra("menuTab", 0);
+            i.removeExtra("menuTab");
+            handler.postDelayed(() -> openMenuTab(t), 400);
+        }
+        if (i.getBooleanExtra("remote", false) && i.hasExtra("cmd")) {
+            final String cmd = i.getStringExtra("cmd");
+            final Intent copy = new Intent(i);
+            i.removeExtra("remote"); i.removeExtra("cmd");
+            handler.postDelayed(() -> remote(cmd, copy), 400);
+        }
+    }
+
+    private void openMenuTab(int t) {
+        if (menuDlg != null && menuDlg.isShowing()) menuDlg.dismiss();
+        showMenu();
+        menuView.setTab(Math.max(0, Math.min(4, t)));
+    }
+
+    /** Commando's van Remote die de launcher zelf uitvoert. */
+    void remote(String cmd, Intent in) {
+        switch (cmd) {
+            case "menu": openMenuTab(in.getIntExtra("tab", 0)); break;
+            case "close": if (menuDlg != null) menuDlg.dismiss(); break;
+            case "open": {
+                String w = String.valueOf(in.getStringExtra("what"));
+                if (menuDlg != null && menuDlg.isShowing() && !w.equals("maintenance") && !w.equals("highscores") && !w.equals("locations")) menuDlg.dismiss();
+                switch (w) {
+                    case "triplog": startActivity(new Intent(this, TripLogActivity.class)); break;
+                    case "debug": startActivity(new Intent(this, DebugActivity.class)); break;
+                    case "fuel": showFuelDialog(); break;
+                    case "maintenance": Dialogs.maintenance(this, store, () -> { if (menuView != null) menuView.invalidate(); }); break;
+                    case "highscores": Dialogs.highscores(this, theme); break;
+                    case "locations": Dialogs.locationList(this, null); break;
+                    default: break; // home: alleen launcher naar voren
+                }
+                break;
+            }
+            case "key": case "longkey": {
+                String n = String.valueOf(in.getStringExtra("name"));
+                int[] ids = {R.id.btn_aa, R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_trips, R.id.btn_apps, R.id.btn_settings, R.id.btn_menu};
+                String[] names = {"aa", "radio", "eq", "fuel", "trips", "apps", "settings", "menu"};
+                for (int k = 0; k < names.length; k++) if (names[k].equals(n)) {
+                    View v = findViewById(ids[k]);
+                    if (cmd.equals("key")) v.performClick(); else v.performLongClick();
+                }
+                break;
+            }
+            case "theme": {
+                Theme t = Theme.byId(String.valueOf(in.getStringExtra("id")));
+                getSharedPreferences("optimus", MODE_PRIVATE).edit().putString("theme", t.id).apply();
+                applyTheme(t);
+                if (menuView != null) menuView.setTheme(t);
+                break;
+            }
+            case "lang": Lang.set(this, "en".equals(in.getStringExtra("value"))); languageChanged(); break;
+            default: CarLogger.note("remote: onbekend commando " + cmd);
+        }
     }
 
     @Override protected void onNewIntent(Intent intent) {

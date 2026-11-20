@@ -68,7 +68,20 @@ public class MenuView extends View {
 
     @Override protected void onSizeChanged(int w, int h, int ow, int oh) { s = w / 1240f; H = h / s; }
 
-    private void hit(RectF r, Runnable a) { hits.add(new Object[]{r, a}); }
+    private void hit(RectF r, Runnable a) { hits.add(new Object[]{r, a, lastLabel}); lastLabel = ""; }
+    private String lastLabel = "";
+
+    /** Voor de afstandsbediening: alle tikvlakken met schermcoördinaten. */
+    public String dumpHits(int ox, int oy, String ind) {
+        StringBuilder b = new StringBuilder();
+        b.append(ind).append("tabblad nu: ").append(tab).append('\n');
+        for (Object[] h : hits) {
+            RectF r = (RectF) h[0];
+            b.append(String.format(java.util.Locale.US, "%stik \"%s\"  midden %d,%d\n", ind, h[2],
+                    ox + Math.round(r.centerX() * s), oy + Math.round(r.centerY() * s)));
+        }
+        return b.toString();
+    }
 
     @Override public boolean onTouchEvent(MotionEvent e) {
         if (e.getAction() == MotionEvent.ACTION_DOWN) return true;
@@ -98,12 +111,14 @@ public class MenuView extends View {
             final int idx = i;
             RectF r = new RectF(18, y, 282, y + 82);
             pt.uiTab(c, r, Lang.en ? TABS[i][1] : TABS[i][0], Lang.en ? TABS[i][3] : TABS[i][2], i == tab, key);
+            lastLabel = "tab " + TABS[i][0];
             hit(r, () -> setTab(idx));
             y += 92;
         }
         pt.uiText(c, "OPTIMUS LAUNCHER " + host.version(), 24, y + 14, 10, 0xFF5F5F69, Paint.Align.LEFT);
         RectF close = new RectF(18, y + 30, 282, Math.min(y + 86, H - 22));
         pt.uiButton(c, close, Lang.t("SLUITEN", "CLOSE"), true, key, 16);
+        lastLabel = "SLUITEN";
         hit(close, host::close);
 
         float x0 = 344, x1 = 1212;
@@ -125,6 +140,7 @@ public class MenuView extends View {
     private RectF button(Canvas c, float l, float t, float r, float b, String text, boolean on, Runnable a) {
         RectF rr = new RectF(l, t, r, b);
         pt.uiButton(c, rr, text, on, theme.key, 15);
+        lastLabel = text;
         hit(rr, a);
         return rr;
     }
@@ -146,6 +162,7 @@ public class MenuView extends View {
             pt.uiText(c, Lang.en ? descEn(t.id) : t.desc, r.left + 24, r.top + 128, 10, 0xFF8E8E9A, Paint.Align.LEFT);
             pt.uiLamp(c, r.right - 30, r.top + 30, 10, theme.key, on);
             if (on) pt.uiGlass(c, r);
+            lastLabel = "thema " + t.id;
             hit(r, () -> host.pickTheme(t));
         }
     }
@@ -295,6 +312,7 @@ public class MenuView extends View {
             pt.uiText(c, hasAddr ? l.addr : Lang.t("(ADRES VOLGT)", "(ADDRESS PENDING)"), r.left + 260, r.centerY() + 5, 11, hasAddr ? 0xFFB8B8C2 : 0xFF6C6C78, Paint.Align.LEFT);
             pt.uiText(c, ">", r.right - 18, r.centerY() + 6, 14, 0xFF6C6C78, Paint.Align.RIGHT);
             pt.uiGlass(c, r);
+            lastLabel = "locatie " + l.label();
             hit(r, () -> host.location(idx));
             y += 54;
         }

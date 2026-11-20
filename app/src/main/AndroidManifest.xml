@@ -57,6 +57,16 @@
             android:screenOrientation="landscape"
             android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|uiMode" />
 
+        <!-- afstandsbediening via adb (niet geëxporteerd: andere apps kunnen er niet bij) -->
+        <activity
+            android:name=".RemoteActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity="nl.spoonpaco.optimuslauncher.remote"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <activity
             android:name=".TripLogActivity"
             android:exported="false"
