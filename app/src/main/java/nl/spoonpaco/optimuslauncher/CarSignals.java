@@ -4,7 +4,8 @@ package nl.spoonpaco.optimuslauncher;
  * Signalen van de auto, gelezen uit de FlyAudio-logregels (READ_LOGS).
  * Vondsten 20-11-2026 uit de autolog:
  *  - GPIO 60: VERLICHTING (bevestigd door Mick 20-11): 0 = lichten aan, 1 = uit (actief laag)
- *  - HANDREM: MCU ff5504 00 04 vv (01 = erop) — op aanwijzing van Mick 20-11
+ *  - HANDREM: nog niet gevonden (MCU 04 bleek het niet te zijn, 20-11)
+ *  - MCU ff5504 00 04 vv: onbekend, gelogd als "mcu04"
  *  - MCU ff5504 00 01 vv: contact (01 = aan, 00 = uit)
  *  - MCU ff5505 00 02 hhhh: accuspanning in mV (14,3 V = motor draait)
  */
@@ -45,7 +46,7 @@ public final class CarSignals {
                     String key = f.substring(8, 10);
                     int v = Integer.parseInt(f.substring(10, 12), 16);
                     if (key.equals("01")) return set("contact", v);
-                    if (key.equals("04")) return set("handrem", v);
+                    if (key.equals("04")) return set("mcu04", v);
                     return false;
                 }
                 if (f.length() == 16 && f.startsWith("ff55050002")) {
