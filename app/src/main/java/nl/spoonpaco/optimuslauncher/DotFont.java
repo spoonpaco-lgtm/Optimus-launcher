@@ -5,11 +5,11 @@ import android.graphics.*;
 /** 5x7 dot-matrix lettertype voor het Old-skool-thema: elke "pixel" is een lampje. */
 public final class DotFont {
     private static final String CHARS = "\u0030\u0031\u0032\u0033\u0034\u0035\u0036\u0037\u0038\u0039\u0041\u0042\u0043\u0044\u0045\u0047\u0048\u0049\u004a\u004b\u004c\u004d\u004e\u004f\u0050\u0052\u0053\u0054\u0055\u0056\u0057\u005a\u0046\u0059\u0020\u002d\u002e\u003a\u002f\u00b0\u20ac\u0058\u0051\u00b7\u0025\u003f\u0028\u0029\u002b";
-    private static final int[] BITS = {15623448110, 15170932932, 33357578798, 15619854623, 8891181448, 15620127807, 15621129292, 2216829471, 15621113390, 6728664622, 18842895918, 16694887983, 15603893806, 7836583207, 33321092159, 32801457710, 18842895921, 15170932878, 6753100060, 18560947505, 33320633377, 18842572657, 18850958897, 15621211694, 1108854319, 18561353263, 16660235326, 4433514655, 15621211697, 4648912433, 11464787505, 33321787935, 1108837439, 4433521201, 0, 1015808, 6643777536, 207624384, 1143087376, 206118, 30147689564, 18834663985, 23946905134, 6488064, 26610901603, 4299440686, 8726317192, 2290360450, 139432064};
+    private static final long[] BITS = {15623448110L, 15170932932L, 33357578798L, 15619854623L, 8891181448L, 15620127807L, 15621129292L, 2216829471L, 15621113390L, 6728664622L, 18842895918L, 16694887983L, 15603893806L, 7836583207L, 33321092159L, 32801457710L, 18842895921L, 15170932878L, 6753100060L, 18560947505L, 33320633377L, 18842572657L, 18850958897L, 15621211694L, 1108854319L, 18561353263L, 16660235326L, 4433514655L, 15621211697L, 4648912433L, 11464787505L, 33321787935L, 1108837439L, 4433521201L, 0L, 1015808L, 6643777536L, 207624384L, 1143087376L, 206118L, 30147689564L, 18834663985L, 23946905134L, 6488064L, 26610901603L, 4299440686L, 8726317192L, 2290360450L, 139432064L};
 
     private DotFont() { }
 
-    private static int bits(char ch) {
+    private static long bits(char ch) {
         int i = CHARS.indexOf(Character.toUpperCase(ch));
         return i < 0 ? 0 : BITS[i];
     }
@@ -29,11 +29,11 @@ public final class DotFont {
         Path lit = new Path();
         float cx0 = x;
         for (int k = 0; k < t.length(); k++) {
-            int b = bits(t.charAt(k));
+            long b = bits(t.charAt(k));
             for (int row = 0; row < 7; row++) {
                 for (int c5 = 0; c5 < 5; c5++) {
                     float cx = cx0 + c5 * pitch + pitch / 2, cy = y + row * pitch + pitch / 2;
-                    boolean on = (b & (1 << (row * 5 + c5))) != 0;
+                    boolean on = (b & (1L << (row * 5 + c5))) != 0;
                     if (lamp) {
                         p.setShader(new LinearGradient(cx - pitch / 2, cy - pitch / 2, cx + pitch / 2, cy + pitch / 2,
                                 new int[]{0xFFD9D9E0, 0xFF4A4A52, 0xFFC4C4CC}, null, Shader.TileMode.CLAMP));
@@ -63,9 +63,9 @@ public final class DotFont {
         if (lamp) {
             cx0 = x;
             for (int k = 0; k < t.length(); k++) {
-                int b = bits(t.charAt(k));
+                long b = bits(t.charAt(k));
                 for (int row = 0; row < 7; row++) for (int c5 = 0; c5 < 5; c5++) {
-                    if ((b & (1 << (row * 5 + c5))) == 0) continue;
+                    if ((b & (1L << (row * 5 + c5))) == 0) continue;
                     float cx = cx0 + c5 * pitch + pitch / 2, cy = y + row * pitch + pitch / 2;
                     p.setShader(new RadialGradient(cx - r * 0.3f, cy - r * 0.35f, r * 1.4f,
                             new int[]{0xF2FFFFFF, col, (col & 0x00FFFFFF) | 0xCC000000, (col & 0x00FFFFFF) | 0x59000000},
