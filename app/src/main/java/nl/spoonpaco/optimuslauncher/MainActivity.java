@@ -128,6 +128,11 @@ public class MainActivity extends Activity {
             }
         });
         findViewById(R.id.btn_update).setOnClickListener(v -> Updater.check(this, true));
+        // Lang indrukken op een icoon = naam tonen (behalve AA: dat is afspelen/pauze)
+        for (int id : new int[]{R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_apps,
+                R.id.btn_settings, R.id.btn_update, R.id.btn_offline}) {
+            findViewById(id).setOnLongClickListener(v -> { toast(String.valueOf(v.getContentDescription())); return true; });
+        }
 
         ensureLocationAndStartTracker();
 
@@ -381,28 +386,57 @@ public class MainActivity extends Activity {
     }
 
     private void showApps() {
-        PackageManager pm = getPackageManager();
+        final PackageManager pm = getPackageManager();
         Intent main = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
         List<ResolveInfo> list = new ArrayList<>(pm.queryIntentActivities(main, 0));
-        final List<String> pkgs = new ArrayList<>();
-        final List<String> labels = new ArrayList<>();
         Collections.sort(list, new Comparator<ResolveInfo>() {
             @Override public int compare(ResolveInfo a, ResolveInfo b) {
                 return a.loadLabel(pm).toString().compareToIgnoreCase(b.loadLabel(pm).toString());
             }
         });
+        final List<String> pkgs = new ArrayList<>();
+        final List<String> labels = new ArrayList<>();
+        final List<android.graphics.drawable.Drawable> icons = new ArrayList<>();
         for (ResolveInfo ri : list) {
             String p = ri.activityInfo.packageName;
             if (p.equals(getPackageName()) || pkgs.contains(p)) continue;
             pkgs.add(p);
             labels.add(ri.loadLabel(pm).toString());
+            icons.add(ri.loadIcon(pm));
         }
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Apps")
-                .setItems(labels.toArray(new String[0]), (d, which) ->
-                        launch(pkgs.get(which), labels.get(which)))
-                .setNegativeButton("Sluiten", null)
-                .show();
+        final float d = getResources().getDisplayMetrics().density;
+        android.widget.GridView grid = new android.widget.GridView(this);
+        grid.setNumColumns(6);
+        grid.setVerticalSpacing((int) (12 * d));
+        grid.setHorizontalSpacing((int) (12 * d));
+        grid.setPadding((int) (16 * d), (int) (16 * d), (int) (16 * d), (int) (16 * d));
+        grid.setBackgroundColor(getColor(R.color.bg));
+        final AlertDialog[] dlg = new AlertDialog[1];
+        grid.setAdapter(new android.widget.BaseAdapter() {
+            @Override public int getCount() { return pkgs.size(); }
+            @Override public Object getItem(int i) { return pkgs.get(i); }
+            @Override public long getItemId(int i) { return i; }
+            @Override public View getView(int i, View conv, android.view.ViewGroup parent) {
+                android.widget.ImageView iv = conv instanceof android.widget.ImageView
+                        ? (android.widget.ImageView) conv : new android.widget.ImageView(MainActivity.this);
+                int sz = (int) (88 * d);
+                iv.setLayoutParams(new android.widget.AbsListView.LayoutParams(sz, sz));
+                iv.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                iv.setPadding((int) (8 * d), (int) (8 * d), (int) (8 * d), (int) (8 * d));
+                iv.setImageDrawable(icons.get(i));
+                iv.setContentDescription(labels.get(i));
+                return iv;
+            }
+        });
+        grid.setOnItemClickListener((p, v, i, id) -> {
+            if (dlg[0] != null) dlg[0].dismiss();
+            launch(pkgs.get(i), labels.get(i));
+        });
+        grid.setOnItemLongClickListener((p, v, i, id) -> { toast(labels.get(i)); return true; });
+        dlg[0] = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen)
+                .setView(grid)
+                .create();
+        dlg[0].show();
     }
 
     private void showFuelDialog() {

@@ -96,13 +96,14 @@
         android:ellipsize="end" />
 
     <!-- Alleen zichtbaar als Android Auto niet verbindt -->
-    <Button
+    <ImageButton
         android:id="@+id/btn_offline"
         style="@style/Tile"
         android:layout_width="match_parent"
         android:layout_height="64dp"
         android:visibility="gone"
-        android:text="Offline navigeren (Organic Maps)" />
+        android:src="@drawable/ic_nav"
+        android:contentDescription="Offline navigeren" />
 
     <!-- Knoppen -->
     <GridLayout
@@ -114,13 +115,13 @@
         android:alignmentMode="alignBounds"
         android:useDefaultMargins="false">
 
-        <Button android:id="@+id/btn_aa" style="@style/Tile" android:layout_columnSpan="2" android:text="@string/aa" />
-        <Button android:id="@+id/btn_radio" style="@style/Tile" android:text="@string/radio" />
-        <Button android:id="@+id/btn_eq" style="@style/Tile" android:text="@string/eq" />
-        <Button android:id="@+id/btn_fuel" style="@style/Tile" android:text="@string/fuel" />
-        <Button android:id="@+id/btn_apps" style="@style/Tile" android:text="@string/apps" />
-        <Button android:id="@+id/btn_settings" style="@style/Tile" android:text="@string/settings" />
-        <Button android:id="@+id/btn_update" style="@style/Tile" android:text="@string/update" />
+        <ImageButton android:id="@+id/btn_aa" style="@style/Tile" android:layout_columnSpan="2" android:src="@drawable/ic_aa" android:contentDescription="@string/aa" />
+        <ImageButton android:id="@+id/btn_radio" style="@style/Tile" android:src="@drawable/ic_radio" android:contentDescription="@string/radio" />
+        <ImageButton android:id="@+id/btn_eq" style="@style/Tile" android:src="@drawable/ic_eq" android:contentDescription="@string/eq" />
+        <ImageButton android:id="@+id/btn_fuel" style="@style/Tile" android:src="@drawable/ic_fuel" android:contentDescription="@string/fuel" />
+        <ImageButton android:id="@+id/btn_apps" style="@style/Tile" android:src="@drawable/ic_apps" android:contentDescription="@string/apps" />
+        <ImageButton android:id="@+id/btn_settings" style="@style/Tile" android:src="@drawable/ic_settings" android:contentDescription="@string/settings" />
+        <ImageButton android:id="@+id/btn_update" style="@style/Tile" android:src="@drawable/ic_update" android:contentDescription="@string/update" />
 
     </GridLayout>
 
