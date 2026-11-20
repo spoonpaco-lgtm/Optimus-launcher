@@ -50,7 +50,14 @@ public class Store {
         e.apply();
     }
 
-    public float calFactor() { return p.getFloat("cal", 1f); }
+    /**
+     * Startwaarde van de kalibratie: de oude radio toonde bij Mick vaak 12,2 km/l (= 8,2 l/100 km),
+     * het boekje zegt 7,4 gecombineerd -> 8,2 / 7,4 = 1,11. Na de eerste volle tankbeurt neemt
+     * de echte meting het over.
+     */
+    public static final float START_CAL = 1.11f;
+
+    public float calFactor() { return p.getFloat("cal", START_CAL); }
 
     // ---- tank ----
 
