@@ -5,7 +5,7 @@ package nl.spoonpaco.optimuslauncher;
  * Vondsten 20-11-2026 uit de autolog:
  *  - GPIO 60: VERLICHTING (bevestigd door Mick 20-11): 0 = lichten aan, 1 = uit (actief laag)
  *  - HANDREM: nog niet gevonden (MCU 04 bleek het niet te zijn, 20-11)
- *  - MCU ff5504 00 04 vv: onbekend, gelogd als "mcu04"
+ *  - MCU ff5504 00 04 vv: versterker aan (geluid speelt) = 1, gedempt = 0 (getest 20-11: volgt onAmpMuteStatusCallback)
  *  - MCU ff5504 00 01 vv: contact (01 = aan, 00 = uit)
  *  - MCU ff5505 00 02 hhhh: accuspanning in mV (14,3 V = motor draait)
  */
@@ -55,7 +55,7 @@ public final class CarSignals {
                     String key = f.substring(8, 10);
                     int v = Integer.parseInt(f.substring(10, 12), 16);
                     if (key.equals("01")) return set("contact", v);
-                    if (key.equals("04")) return set("mcu04", v);
+                    if (key.equals("04")) return set("versterker", v);
                     return false;
                 }
                 if (f.length() == 16 && f.startsWith("ff55050002")) {
@@ -76,7 +76,7 @@ public final class CarSignals {
         switch (name) {
             case "handrem": old = handbrake; handbrake = v; break;
             case "contact": old = contact; contact = v; break;
-            case "mcu04": old = mcu04; mcu04 = v; break;
+            case "versterker": old = mcu04; mcu04 = v; break;
             case "scherm": old = screen; screen = v; break;
             case "acc": old = acc; acc = v; break;
             default: old = lights; lights = v; break;

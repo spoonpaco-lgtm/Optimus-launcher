@@ -35,7 +35,7 @@ public class CockpitView extends View {
     public int rangeKm = -1;
     public float tankL = -1f;
     public float volts = -1f;
-    public boolean lContact, lMotor, lLicht, lHandrem, lAuto, lLog;
+    public boolean lContact, lMotor, lLicht, lAmp, lAuto, lLog;
 
     public Listener listener;
 
@@ -354,9 +354,9 @@ public class CockpitView extends View {
         float x = r.left + 20;
         // lampjes 3 x 2
         float bx = r.left + 18, bw = r.width() - 36;
-        String[] n = Lang.en ? new String[]{"IGNITION", "ENGINE", "LIGHTS", "HANDBRAKE", "AUTO", "LOG"} : new String[]{"CONTACT", "MOTOR", "LICHT", "HANDREM", "AUTO", "LOG"};
-        int[] col = {0xFFF4E04D, WG, WA, WR, 0xFF2F8CFF, WG};
-        boolean[] on = {lContact, lMotor, lLicht, lHandrem, lAuto, lLog};
+        String[] n = Lang.en ? new String[]{"IGNITION", "ENGINE", "LIGHTS", "AMPLIFIER", "AUTO", "LOG"} : new String[]{"CONTACT", "MOTOR", "LICHT", "VERSTERKER", "AUTO", "LOG"};
+        int[] col = {0xFFF4E04D, WG, WA, 0xFFB66BFF, 0xFF2F8CFF, WG};
+        boolean[] on = {lContact, lMotor, lLicht, lAmp, lAuto, lLog};
         for (int i = 0; i < 6; i++) {
             float cx = bx + bw * (i % 3 * 2 + 1) / 6f;
             float cy = r.top + 18 + (i < 3 ? 34 : 98);

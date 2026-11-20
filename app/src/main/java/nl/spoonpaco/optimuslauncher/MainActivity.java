@@ -529,7 +529,7 @@ public class MainActivity extends Activity {
         c.lContact = CarSignals.contact == 1 || (CarSignals.contact < 0 && c.volts > 0);
         c.lMotor = CarSignals.engineRunning();
         c.lLicht = CarSignals.lights == 1;
-        c.lHandrem = CarSignals.handbrake == 1;
+        c.lAmp = CarSignals.mcu04 == 1;
         c.lAuto = aaSeenRecently;
         c.lLog = CarLogger.state == 2;
         c.invalidate();
