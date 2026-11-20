@@ -39,8 +39,22 @@ public class CockpitView extends View {
 
     public Listener listener;
 
-    static final int RED = 0xFFFF2D23, AMB = 0xFFFFB21A, GRN = 0xFF3BE07A, BLU = 0xFF2F8CFF, YEL = 0xFFFFD23A,
+    // vaste waarschuwingskleuren (balken, lampjes)
+    static final int WR = 0xFFFF2D23, WA = 0xFFFFB21A, WG = 0xFF3BE07A,
             DIM = 0xFF6C6C78, LBL = 0xFF8E8E9A, TXT = 0xFFC9C9D2;
+
+    // themakleuren (zie Theme): RED = snelheid, AMB = klok/verbruik/naald, GRN = rit, BLU = accu, YEL = tank
+    int RED = WR, AMB = WA, GRN = WG, BLU = 0xFF2F8CFF, YEL = 0xFFFFD23A;
+    int tRed = 0xFF2B0505, eRed = 0xFF4A0D0D, tAmb = 0xFF241600, eAmb = 0xFF4A3000;
+    int rib = 0x660E0E12, bgTop = 0xFF17171D, north = WR;
+
+    public void setTheme(Theme t) {
+        RED = t.speed; AMB = t.accent; GRN = t.trip; BLU = t.accu; YEL = t.tank;
+        tRed = t.speedTint; eRed = t.speedEdge; tAmb = t.accentTint; eAmb = t.accentEdge;
+        rib = t.rib; bgTop = t.bgTop; north = t.north;
+        bg = null;
+        invalidate();
+    }
 
     private float s = 1f;              // schaal
     private Bitmap bg;
@@ -100,15 +114,15 @@ public class CockpitView extends View {
         Canvas c = new Canvas(bg);
         c.drawColor(0xFF040405);
         // radiale gloed bovenin + verticale ribbels
-        p.setShader(new RadialGradient(getWidth() / 2f, 0, getWidth() * 0.7f, 0xFF17171D, 0xFF040405, Shader.TileMode.CLAMP));
+        p.setShader(new RadialGradient(getWidth() / 2f, 0, getWidth() * 0.7f, bgTop, 0xFF040405, Shader.TileMode.CLAMP));
         c.drawRect(0, 0, getWidth(), getHeight(), p);
         p.setShader(null);
-        p.setColor(0x660E0E12);
+        p.setColor(rib);
         for (float x = 0; x < getWidth(); x += 26 * s) c.drawRect(x, 0, x + 2 * s, getHeight(), p);
         c.save();
         c.scale(s, s);
         // pinstripe
-        p.setShader(new LinearGradient(0, 0, 1240, 0, new int[]{0x00FF2D23, RED, AMB, RED, 0x00FF2D23}, null, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0, 0, 1240, 0, new int[]{RED & 0x00FFFFFF, RED, AMB, RED, RED & 0x00FFFFFF}, null, Shader.TileMode.CLAMP));
         glow.setShader(p.getShader());
         glow.setMaskFilter(new BlurMaskFilter(8, BlurMaskFilter.Blur.NORMAL));
         c.drawRect(0, 70, 1240, 73, glow);
@@ -116,9 +130,9 @@ public class CockpitView extends View {
         p.setShader(null); glow.setShader(null); glow.setMaskFilter(null);
         for (RectF r : new RectF[]{pan1, pan2, pan3}) bezel(c, r);
         // vaste vensters/vakken
-        window(c, new RectF(0, 2, 170, 60), 0xFF241600, 0xFF4A3000);
+        window(c, new RectF(0, 2, 170, 60), tAmb, eAmb);
         compassFrame(c);
-        window(c, new RectF(1080, 2, 1240, 60), 0xFF241600, 0xFF4A3000);
+        window(c, new RectF(1080, 2, 1240, 60), tAmb, eAmb);
         sunken(c, new RectF(pan2.left + 18, pan2.top + 18, pan2.right - 18, pan2.top + 150));
         c.restore();
         // scanlines + vignet over alles
@@ -235,7 +249,7 @@ public class CockpitView extends View {
             boolean dim = heading < 0;
             if (a % 45 == 0) {
                 boolean big = a % 90 == 0;
-                int col = a == 0 ? RED : (big ? 0xFFECEFF4 : 0xFF9A9AA6);
+                int col = a == 0 ? north : (big ? 0xFFECEFF4 : 0xFF9A9AA6);
                 if (dim) col = 0xFF3A3A42;
                 p.setColor(col);
                 c.drawRect(x - 1, r.bottom - 18, x + 1, r.bottom - 4, p);
@@ -290,7 +304,7 @@ public class CockpitView extends View {
         float ph = r.height();
         float digitH = Math.min(112, ph * 0.30f);
         RectF w = new RectF(x, y + 26, x + digitH * 2.05f + 52, y + 26 + digitH + 32);
-        window(c, w, 0xFF2B0505, 0xFF4A0D0D);
+        window(c, w, tRed, eRed);
         drawSegCentered(c, speed < 0 ? "--" : (speed < 10 ? " " + speed : String.valueOf(Math.min(speed, 199))), w, digitH, RED);
         glass(c, w);
         text(c, "KM/U", w.right + 12, w.bottom - 10, 16, RED);
@@ -307,8 +321,8 @@ public class CockpitView extends View {
         // max / gem
         float my = r.bottom - 64;
         float half = (r.width() - 52) / 2f;
-        miniValue(c, "MAX", fmt0(tripMax), x, my, half, RED, 0xFF2B0505, 0xFF4A0D0D);
-        miniValue(c, "GEM", fmt0(tripAvg), x + half + 12, my, half, RED, 0xFF2B0505, 0xFF4A0D0D);
+        miniValue(c, "MAX", fmt0(tripMax), x, my, half, RED, tRed, eRed);
+        miniValue(c, "GEM", fmt0(tripAvg), x + half + 12, my, half, RED, tRed, eRed);
     }
 
     private void drawTripPanel(Canvas c) {
@@ -317,7 +331,7 @@ public class CockpitView extends View {
         // lampjes 3 x 2
         float bx = r.left + 18, bw = r.width() - 36;
         String[] n = {"CONTACT", "MOTOR", "LICHT", "HANDREM", "AUTO", "LOG"};
-        int[] col = {0xFFF4E04D, GRN, AMB, RED, BLU, GRN};
+        int[] col = {0xFFF4E04D, WG, WA, WR, 0xFF2F8CFF, WG};
         boolean[] on = {lContact, lMotor, lLicht, lHandrem, lAuto, lLog};
         for (int i = 0; i < 6; i++) {
             float cx = bx + bw * (i % 3 * 2 + 1) / 6f;
@@ -364,7 +378,7 @@ public class CockpitView extends View {
         float digitH = Math.min(82, r.height() * 0.22f);
         float kml = l100 > 0 ? 100f / l100 : -1f;
         RectF w = new RectF(x, y + 26, x + digitH * 2.8f + 44, y + 26 + digitH + 28);
-        window(c, w, 0xFF241600, 0xFF4A3000);
+        window(c, w, tAmb, eAmb);
         drawSegCentered(c, kml < 0 ? "--.-" : String.format(Locale.US, "%.1f", Math.min(kml, 99.9f)), w, digitH, AMB);
         glass(c, w);
         text(c, "KM/L", w.right + 12, w.bottom - 30, 15, AMB);
@@ -384,7 +398,7 @@ public class CockpitView extends View {
         text(c, "TANK", x, ty + 14, 11, YEL);
         String rk = rangeKm < 0 ? "---" : String.valueOf(rangeKm);
         float rw = segWidth(rk, 28);
-        drawSeg(c, rk, r.right - 50 - rw, ty - 6, 28, rangeKm >= 0 && rangeKm < 60 ? RED : GRN);
+        drawSeg(c, rk, r.right - 50 - rw, ty - 6, 28, rangeKm >= 0 && rangeKm < 60 ? WR : GRN);
         text(c, "KM", r.right - 42, ty + 20, 11, GRN);
         int litDots = tankL < 0 ? 0 : Math.max(1, Math.min(12, Math.round(tankL / 57f * 12f)));
         text(c, "L", x, ty + 46, 11, DIM);
@@ -412,10 +426,10 @@ public class CockpitView extends View {
         float gap = 3, sw = (x2 - x1 - 10 - gap * (n - 1)) / n;
         for (int i = 0; i < n; i++) {
             int col;
-            if (scheme == 0) col = i < n * 14 / 22 ? GRN : (i < n * 18 / 22 ? AMB : RED);
-            else if (scheme == 1) col = i < n / 2 ? GRN : (i < n * 13 / 16 ? AMB : RED);
-            else if (scheme == 2) col = i < n * 3 / 16 ? RED : (i < n * 7 / 16 ? AMB : GRN);
-            else col = i < Math.max(1, n / 5) ? RED : (i < Math.max(2, n * 2 / 5) ? AMB : GRN);
+            if (scheme == 0) col = i < n * 14 / 22 ? WG : (i < n * 18 / 22 ? WA : WR);
+            else if (scheme == 1) col = i < n / 2 ? WG : (i < n * 13 / 16 ? WA : WR);
+            else if (scheme == 2) col = i < n * 3 / 16 ? WR : (i < n * 7 / 16 ? WA : WG);
+            else col = i < Math.max(1, n / 5) ? WR : (i < Math.max(2, n * 2 / 5) ? WA : WG);
             float sx = x1 + 5 + i * (sw + gap);
             if (i < lit) glowRect(c, sx, y + 5, sx + sw, y + 5 + h, col);
             else { p.setColor(0xFF17171C); c.drawRect(sx, y + 5, sx + sw, y + 5 + h, p); }

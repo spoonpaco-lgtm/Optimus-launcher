@@ -83,6 +83,7 @@ public class MainActivity extends Activity {
         stLog = findViewById(R.id.st_log);
         stTank = findViewById(R.id.st_tank);
         cockpit = findViewById(R.id.cockpit);
+        applyTheme(Theme.byId(getSharedPreferences("optimus", MODE_PRIVATE).getString("theme", "led")));
         cockpit.listener = new CockpitView.Listener() {
             @Override public void onSpeedTap() { toggleOverlay(); }
             @Override public void onClockLongPress() { startActivity(new Intent(MainActivity.this, DebugActivity.class)); }
@@ -136,10 +137,10 @@ public class MainActivity extends Activity {
                 toast("Instellingen niet beschikbaar");
             }
         });
-        findViewById(R.id.btn_update).setOnClickListener(v -> Updater.check(this, true));
+        findViewById(R.id.btn_menu).setOnClickListener(v -> showMenu());
         // Lang indrukken op een icoon = naam tonen (behalve AA: dat is afspelen/pauze)
         for (int id : new int[]{R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_apps,
-                R.id.btn_settings, R.id.btn_update}) {
+                R.id.btn_settings, R.id.btn_menu}) {
             findViewById(id).setOnLongClickListener(v -> { toast(String.valueOf(v.getContentDescription())); return true; });
         }
 
@@ -256,6 +257,158 @@ public class MainActivity extends Activity {
             int col = range < 60 ? R.color.bad : range < 120 ? R.color.warn : R.color.fg_dim;
             setStatus(stTank, col, String.format(NL, "⛽ ~%d km  (%.0f l)", range, store.tankLiters()));
         }
+    }
+
+    // ---------- menu + thema's ----------
+
+    private Theme theme = Theme.LED;
+
+    private static final int[] KEY_IDS = {R.id.btn_aa, R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel,
+            R.id.btn_apps, R.id.btn_settings, R.id.btn_menu};
+
+    private void applyTheme(Theme t) {
+        theme = t;
+        cockpit.setTheme(t);
+        float d = getResources().getDisplayMetrics().density;
+        for (int id : KEY_IDS) {
+            android.widget.ImageButton b = findViewById(id);
+            b.setImageTintList(android.content.res.ColorStateList.valueOf(t.key));
+            b.setBackground(keyBackground(t.key, d));
+        }
+    }
+
+    /** Retro drukknop in de themakleur: glanzende bovenkant, schaduw, gloeiende streep onderaan. */
+    private android.graphics.drawable.Drawable keyBackground(int col, float d) {
+        android.graphics.drawable.GradientDrawable shadow = new android.graphics.drawable.GradientDrawable();
+        shadow.setCornerRadius(6 * d); shadow.setColor(0xFF000000);
+        android.graphics.drawable.GradientDrawable body = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xFF2A2A31, 0xFF16161B, 0xFF0B0B0E});
+        body.setCornerRadius(6 * d); body.setStroke((int) d, 0xFF000000);
+        android.graphics.drawable.GradientDrawable line = new android.graphics.drawable.GradientDrawable();
+        line.setCornerRadius(2 * d); line.setColor(col);
+        android.graphics.drawable.LayerDrawable ld = new android.graphics.drawable.LayerDrawable(
+                new android.graphics.drawable.Drawable[]{shadow, body, line});
+        ld.setLayerInset(0, 0, (int) (3 * d), 0, 0);
+        ld.setLayerInset(1, 0, 0, 0, (int) (3 * d));
+        ld.setLayerGravity(2, android.view.Gravity.BOTTOM | android.view.Gravity.FILL_HORIZONTAL);
+        ld.setLayerHeight(2, (int) (2 * d));
+        ld.setLayerInsetLeft(2, (int) (22 * d)); ld.setLayerInsetRight(2, (int) (22 * d));
+        ld.setLayerInsetBottom(2, (int) (11 * d));
+        android.graphics.drawable.GradientDrawable pressed = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xFF1A1A1F, 0xFF08080A});
+        pressed.setCornerRadius(6 * d); pressed.setStroke((int) (2 * d), col);
+        android.graphics.drawable.StateListDrawable sl = new android.graphics.drawable.StateListDrawable();
+        sl.addState(new int[]{android.R.attr.state_pressed}, pressed);
+        sl.addState(new int[]{}, ld);
+        return sl;
+    }
+
+    /** Menu: thema's, update zoeken, debug. */
+    private void showMenu() {
+        float d = getResources().getDisplayMetrics().density;
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (20 * d);
+        box.setPadding(pad, pad, pad, pad);
+        box.setBackgroundColor(0xFF0A0A0D);
+        final AlertDialog[] dlg = new AlertDialog[1];
+
+        box.addView(menuLabel("THEMA", theme.accent, d));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        for (Theme t : Theme.ALL) {
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding((int) (14 * d), (int) (14 * d), (int) (14 * d), (int) (14 * d));
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xFF1A1A20, 0xFF0B0B0E});
+            bg.setCornerRadius(8 * d);
+            bg.setStroke((int) ((t == theme ? 3 : 1) * d), t == theme ? t.key : 0xFF2C2C35);
+            card.setBackground(bg);
+            // kleurstaaltje: drie gloeiende balkjes
+            LinearLayout sw = new LinearLayout(this);
+            sw.setOrientation(LinearLayout.HORIZONTAL);
+            for (int c : new int[]{t.speed, t.accent, t.trip, t.key}) {
+                View v = new View(this);
+                android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+                g.setCornerRadius(2 * d); g.setColor(c);
+                v.setBackground(g);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, (int) (14 * d), 1f);
+                lp.setMargins((int) (2 * d), 0, (int) (2 * d), 0);
+                sw.addView(v, lp);
+            }
+            card.addView(sw, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (int) (14 * d)));
+            TextView name = menuLabel(t.name.toUpperCase(), t.key, d);
+            name.setTextSize(15);
+            card.addView(name);
+            TextView desc = new TextView(this);
+            desc.setText(t.desc);
+            desc.setTextColor(0xFF8E8E9A);
+            desc.setTextSize(12);
+            card.addView(desc);
+            card.setOnClickListener(v -> {
+                getSharedPreferences("optimus", MODE_PRIVATE).edit().putString("theme", t.id).apply();
+                applyTheme(t);
+                if (dlg[0] != null) dlg[0].dismiss();
+                toast("Thema: " + t.name);
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            lp.setMargins((int) (6 * d), (int) (6 * d), (int) (6 * d), (int) (6 * d));
+            row.addView(card, lp);
+        }
+        box.addView(row);
+
+        box.addView(menuLabel("SYSTEEM", theme.accent, d));
+        LinearLayout row2 = new LinearLayout(this);
+        row2.setOrientation(LinearLayout.HORIZONTAL);
+        row2.addView(menuButton(R.drawable.ic_update, "UPDATE ZOEKEN", d, v -> { if (dlg[0] != null) dlg[0].dismiss(); Updater.check(this, true); }),
+                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
+        row2.addView(menuButton(R.drawable.ic_settings, "DEBUG", d, v -> { if (dlg[0] != null) dlg[0].dismiss(); startActivity(new Intent(this, DebugActivity.class)); }),
+                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
+        row2.addView(menuButton(R.drawable.ic_apps, "SLUITEN", d, v -> { if (dlg[0] != null) dlg[0].dismiss(); }),
+                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
+        box.addView(row2);
+
+        dlg[0] = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar)
+                .setView(box).create();
+        dlg[0].show();
+        if (dlg[0].getWindow() != null) dlg[0].getWindow().setLayout((int) (900 * d), LinearLayout.LayoutParams.WRAP_CONTENT);
+    }
+
+    private TextView menuLabel(String t, int col, float d) {
+        TextView v = new TextView(this);
+        v.setText(t);
+        v.setTypeface(android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD));
+        v.setLetterSpacing(0.2f);
+        v.setTextSize(13);
+        v.setTextColor(col);
+        v.setShadowLayer(8f, 0, 0, (col & 0x00FFFFFF) | 0x99000000);
+        v.setPadding((int) (6 * d), (int) (12 * d), 0, (int) (6 * d));
+        return v;
+    }
+
+    private View menuButton(int icon, String label, float d, View.OnClickListener l) {
+        LinearLayout b = new LinearLayout(this);
+        b.setOrientation(LinearLayout.HORIZONTAL);
+        b.setGravity(android.view.Gravity.CENTER);
+        b.setBackground(keyBackground(theme.key, d));
+        android.widget.ImageView iv = new android.widget.ImageView(this);
+        iv.setImageResource(icon);
+        iv.setImageTintList(android.content.res.ColorStateList.valueOf(theme.key));
+        b.addView(iv, new LinearLayout.LayoutParams((int) (32 * d), (int) (32 * d)));
+        TextView tv = menuLabel(label, theme.key, d);
+        tv.setPadding((int) (10 * d), 0, 0, 0);
+        b.addView(tv);
+        b.setClickable(true);
+        b.setOnClickListener(l);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, (int) (72 * d), 1f);
+        b.setLayoutParams(lp);
+        android.widget.FrameLayout wrap = new android.widget.FrameLayout(this);
+        wrap.setPadding((int) (6 * d), (int) (6 * d), (int) (6 * d), (int) (6 * d));
+        wrap.addView(b, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        return wrap;
     }
 
     private void refreshCockpit(boolean fresh) {
