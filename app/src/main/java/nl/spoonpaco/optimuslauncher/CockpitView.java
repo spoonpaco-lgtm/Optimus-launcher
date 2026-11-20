@@ -361,18 +361,21 @@ public class CockpitView extends View {
         text(c, "GESCHAT", r.right - 20, y + 11, 10, DIM);
         p.setTextAlign(Paint.Align.LEFT);
         float digitH = Math.min(82, r.height() * 0.22f);
-        RectF w = new RectF(x, y + 26, x + digitH * 2.2f + 44, y + 26 + digitH + 28);
+        float kml = l100 > 0 ? 100f / l100 : -1f;
+        RectF w = new RectF(x, y + 26, x + digitH * 2.8f + 44, y + 26 + digitH + 28);
         window(c, w, 0xFF241600, 0xFF4A3000);
-        drawSegCentered(c, l100 < 0 ? "-.-" : String.format(Locale.US, "%.1f", Math.min(l100, 99.9f)), w, digitH, AMB);
+        drawSegCentered(c, kml < 0 ? "--.-" : String.format(Locale.US, "%.1f", Math.min(kml, 99.9f)), w, digitH, AMB);
         glass(c, w);
-        text(c, "L/100", w.right + 12, w.bottom - 8, 15, AMB);
+        text(c, "KM/L", w.right + 12, w.bottom - 30, 15, AMB);
+        text(c, l100 < 0 ? "-.- L/100" : String.format(Locale.US, "%.1f L/100", l100), w.right + 12, w.bottom - 8, 11, LBL);
         float by = w.bottom + 14;
-        int lit = l100 < 0 ? 0 : Math.max(0, Math.min(16, Math.round((l100 - 4f) / 8f * 16f)));
-        bar(c, x, by, r.right - 20, 13, 16, lit, 1);
+        // balk: 6..22 km/l, zuinig = groen (rechts)
+        int lit = kml < 0 ? 0 : Math.max(0, Math.min(16, Math.round((kml - 6f) / 16f * 16f)));
+        bar(c, x, by, r.right - 20, 13, 16, lit, 2);
         float sy = by + 36, bw = r.right - 20 - x;
         for (int i = 0; i <= 4; i++) {
             p.setTextAlign(i == 0 ? Paint.Align.LEFT : i == 4 ? Paint.Align.RIGHT : Paint.Align.CENTER);
-            text(c, String.valueOf(4 + i * 2), x + bw * i / 4f, sy, 10, DIM);
+            text(c, String.valueOf(6 + i * 4), x + bw * i / 4f, sy, 10, DIM);
         }
         p.setTextAlign(Paint.Align.LEFT);
         // tank
@@ -413,7 +416,8 @@ public class CockpitView extends View {
         for (int i = 0; i < n; i++) {
             int col;
             if (scheme == 0) col = i < n * 14 / 22 ? GRN : (i < n * 18 / 22 ? AMB : RED);
-            else col = i < n / 2 ? GRN : (i < n * 13 / 16 ? AMB : RED);
+            else if (scheme == 1) col = i < n / 2 ? GRN : (i < n * 13 / 16 ? AMB : RED);
+            else col = i < n * 3 / 16 ? RED : (i < n * 7 / 16 ? AMB : GRN);
             float sx = x1 + 5 + i * (sw + gap);
             if (i < lit) glowRect(c, sx, y + 5, sx + sw, y + 5 + h, col);
             else { p.setColor(0xFF17171C); c.drawRect(sx, y + 5, sx + sw, y + 5 + h, p); }

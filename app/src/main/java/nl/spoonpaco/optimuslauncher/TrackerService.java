@@ -423,7 +423,7 @@ public class TrackerService extends Service implements LocationListener {
             // snelheid + gemiddeld (geschat) verbruik van deze rit
             float tk = store.tripKm();
             bubble.setText(tk >= 0.5f
-                    ? sp + String.format(nl, "  ·  %.1f l/100", store.tripLiters() / tk * 100f)
+                    ? sp + String.format(nl, "  ·  %.1f km/l", tk / Math.max(0.01f, store.tripLiters()))
                     : sp);
             return;
         }
@@ -432,8 +432,8 @@ public class TrackerService extends Service implements LocationListener {
         if (km < 0.05f) {
             stats = "Rit: nog niet gereden";
         } else {
-            stats = String.format(nl, "Rit %.1f km\nGem %.0f · Max %.0f km/u\n~%.1f l (%.1f l/100)", km,
-                    store.tripAvgKmh(), store.tripMaxKmh(), store.tripLiters(), store.tripLiters() / km * 100f);
+            stats = String.format(nl, "Rit %.1f km\nGem %.0f · Max %.0f km/u\n~%.1f l · %.1f km/l (%.1f l/100)", km,
+                    store.tripAvgKmh(), store.tripMaxKmh(), store.tripLiters(), km / Math.max(0.01f, store.tripLiters()), store.tripLiters() / km * 100f);
             float cost = store.tripCost();
             if (cost >= 0) stats += String.format(nl, " · € %.2f", cost);
         }

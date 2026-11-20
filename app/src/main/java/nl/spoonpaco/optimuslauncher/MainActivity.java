@@ -513,7 +513,8 @@ public class MainActivity extends Activity {
 
         final EditText liters = numberField("Liters getankt");
         final EditText price = numberField("Prijs per liter (€)");
-        if (store.price() > 0) price.setText(String.format(NL, "%.3f", store.price()));
+        if (store.price() > 0) price.setText(String.format(java.util.Locale.US, "%.3f", store.price()));
+        price.setOnClickListener(v -> { price.setText(""); });
         final CheckBox full = new CheckBox(this);
         full.setText("Tank is nu vol (57 l)");
         full.setTextSize(18);
@@ -521,6 +522,7 @@ public class MainActivity extends Activity {
         box.addView(liters);
         box.addView(price);
         box.addView(full);
+        box.addView(keypad(liters, price));
 
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("Tanken")
@@ -548,7 +550,49 @@ public class MainActivity extends Activity {
         e.setTextSize(20);
         e.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         e.setKeyListener(DigitsKeyListener.getInstance("0123456789.,"));
+        e.setShowSoftInputOnFocus(false); // eigen toetsenblok met punt
+        e.setOnFocusChangeListener((v, has) -> { if (has) focusedField = (EditText) v; });
         return e;
+    }
+
+    private EditText focusedField;
+
+    /** Groot numeriek toetsenblok (1-9, punt, 0, wissen): werkt altijd, ook met punt, en is goed te raken in de auto. */
+    private View keypad(EditText first, EditText second) {
+        focusedField = first;
+        first.requestFocus();
+        float d = getResources().getDisplayMetrics().density;
+        android.widget.GridLayout g = new android.widget.GridLayout(this);
+        g.setColumnCount(3);
+        g.setPadding(0, (int) (8 * d), 0, 0);
+        String[] keys = {"1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"};
+        for (String k : keys) {
+            android.widget.Button b = new android.widget.Button(this);
+            b.setText(k);
+            b.setTextSize(24);
+            b.setTextColor(0xFFFFB21A);
+            b.setBackgroundResource(R.drawable.key_bg);
+            android.widget.GridLayout.LayoutParams lp = new android.widget.GridLayout.LayoutParams(
+                    android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
+                    android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f));
+            lp.width = 0;
+            lp.height = (int) (56 * d);
+            lp.setMargins((int) (4 * d), (int) (4 * d), (int) (4 * d), (int) (4 * d));
+            b.setOnClickListener(v -> {
+                EditText f = focusedField != null ? focusedField : first;
+                android.text.Editable t = f.getText();
+                if (k.equals("⌫")) {
+                    if (t.length() > 0) t.delete(t.length() - 1, t.length());
+                } else if (k.equals(".")) {
+                    if (t.toString().indexOf('.') < 0 && t.toString().indexOf(',') < 0) t.append(t.length() == 0 ? "0." : ".");
+                } else {
+                    t.append(k);
+                }
+                f.setSelection(f.getText().length());
+            });
+            g.addView(b, lp);
+        }
+        return g;
     }
 
     private static float parse(String s) {
