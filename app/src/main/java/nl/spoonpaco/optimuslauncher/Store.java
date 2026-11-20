@@ -158,6 +158,21 @@ public class Store {
         return sb.toString();
     }
 
+    /** Regels voor het ritsamenvatting-display. */
+    public String[][] summaryRows() {
+        java.util.Locale us = java.util.Locale.US;
+        float km = p.getFloat("sumKm", 0f), l = p.getFloat("sumL", 0f), c = p.getFloat("sumCost", -1f);
+        int min = Math.round(p.getFloat("sumH", 0f) * 60f);
+        return new String[][]{
+                {"AFSTAND KM", String.format(us, "%.1f", km)},
+                {"RIJTIJD", String.format(us, "%d:%02d", min / 60, min % 60)},
+                {"GEM KM/U", String.format(us, "%.0f", p.getFloat("sumAvg", 0f))},
+                {"MAX KM/U", String.format(us, "%.0f", p.getFloat("sumMax", 0f))},
+                {"LITER", String.format(us, "%.2f", l)},
+                {"KM/L", l > 0.01f ? String.format(us, "%.1f", km / l) : "--"},
+                {"EURO", c >= 0 ? String.format(us, "%.2f", c) : "--"}};
+    }
+
     public String summaryShort() {
         java.util.Locale nl = new java.util.Locale("nl");
         float c = p.getFloat("sumCost", -1f);

@@ -586,12 +586,20 @@ public class MainActivity extends Activity {
 
     private void maybeShowSummary() {
         if (!store.summaryPending() || (summaryDialog != null && summaryDialog.isShowing())) return;
-        summaryDialog = new AlertDialog.Builder(this)
-                .setTitle("Ritsamenvatting")
-                .setMessage(store.summaryText())
-                .setPositiveButton("OK", (d, w) -> store.clearSummary())
+        RetroCard card = new RetroCard(this, theme);
+        card.setSizeDp(460, 400);
+        card.title = "RIT KLAAR";
+        card.rows = store.summaryRows();
+        card.hint = "TIK = OK";
+        summaryDialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar)
+                .setView(card)
                 .setOnCancelListener(d -> store.clearSummary())
-                .show();
+                .create();
+        card.setOnClickListener(v -> { store.clearSummary(); summaryDialog.dismiss(); });
+        summaryDialog.show();
+        if (summaryDialog.getWindow() != null) {
+            summaryDialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0));
+        }
     }
 
     private void launch(String pkg, String naam) {

@@ -470,7 +470,8 @@ public class TrackerService extends Service implements LocationListener {
 
     private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
     private android.view.WindowManager wm;
-    private android.widget.TextView bubble;
+    private RetroCard bubble;
+    private String bubbleTheme = "";
     private android.view.WindowManager.LayoutParams bp;
 
     private final Runnable overlayTick = new Runnable() {
@@ -487,45 +488,34 @@ public class TrackerService extends Service implements LocationListener {
         if (!want) { removeBubble(); return; }
         if (bubble == null) addBubble();
         boolean fresh = System.currentTimeMillis() - lastFixTime < 3000 && speedKmh >= 0;
-        String sp = fresh ? Math.round(speedKmh) + " km/u" : "-- km/u";
-        bubble.setTextColor(getColor(fresh ? R.color.fg : R.color.fg_dim));
-        java.util.Locale nl = new java.util.Locale("nl");
+        String th = getSharedPreferences("optimus", MODE_PRIVATE).getString("theme", "led");
+        if (!th.equals(bubbleTheme)) { bubbleTheme = th; bubble.setTheme(Theme.byId(th)); }
+        java.util.Locale us = java.util.Locale.US;
+        bubble.big = fresh ? String.valueOf(Math.min(199, Math.round(speedKmh))) : "--";
+        float tk = store.tripKm(), tl = store.tripLiters();
+        bubble.side = tk >= 0.5f && tl > 0.01f ? String.format(us, "%.1f", tk / tl) : "--.-";
         if (store.overlayCollapsed()) {
-            // snelheid + gemiddeld (geschat) verbruik van deze rit
-            float tk = store.tripKm();
-            bubble.setText(tk >= 0.5f
-                    ? sp + String.format(nl, "  ·  %.1f km/l", tk / Math.max(0.01f, store.tripLiters()))
-                    : sp);
-            return;
-        }
-        String stats;
-        float km = store.tripKm();
-        if (km < 0.05f) {
-            stats = "Rit: nog niet gereden";
+            bubble.rows = null;
+            bubble.setSizeDp(250, 104);
         } else {
-            stats = String.format(nl, "Rit %.1f km\nGem %.0f · Max %.0f km/u\n~%.1f l · %.1f km/l (%.1f l/100)", km,
-                    store.tripAvgKmh(), store.tripMaxKmh(), store.tripLiters(), km / Math.max(0.01f, store.tripLiters()), store.tripLiters() / km * 100f);
             float cost = store.tripCost();
-            if (cost >= 0) stats += String.format(nl, " · € %.2f", cost);
+            bubble.rows = new String[][]{
+                    {"RIT KM", String.format(us, "%.1f", tk)},
+                    {"GEM", String.format(us, "%.0f", store.tripAvgKmh())},
+                    {"MAX", String.format(us, "%.0f", store.tripMaxKmh())},
+                    {"EURO", cost >= 0 ? String.format(us, "%.2f", cost) : "--"}};
+            bubble.setSizeDp(250, 270);
         }
-        android.text.SpannableString s = new android.text.SpannableString(sp + "\n" + stats);
-        s.setSpan(new android.text.style.RelativeSizeSpan(0.6f), sp.length(), s.length(), 0);
-        s.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.NORMAL), sp.length(), s.length(), 0);
-        bubble.setText(s);
+        bubble.invalidate();
+        try { wm.updateViewLayout(bubble, bp); } catch (Exception ignored) { }
     }
 
     private void addBubble() {
         wm = (android.view.WindowManager) getSystemService(Context.WINDOW_SERVICE);
         float d = getResources().getDisplayMetrics().density;
-        bubble = new android.widget.TextView(this);
-        bubble.setTextSize(22);
-        bubble.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        int p = (int) (10 * d);
-        bubble.setPadding(p * 2, p, p * 2, p);
-        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(0xCC0E0F12);
-        bg.setCornerRadius(14 * d);
-        bubble.setBackground(bg);
+        bubbleTheme = getSharedPreferences("optimus", MODE_PRIVATE).getString("theme", "led");
+        bubble = new RetroCard(this, Theme.byId(bubbleTheme));
+        bubble.setSizeDp(250, 104);
 
         bp = new android.view.WindowManager.LayoutParams(
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT,

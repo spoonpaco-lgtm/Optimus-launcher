@@ -448,6 +448,52 @@ public class CockpitView extends View {
         glass(c, kw);
     }
 
+    /**
+     * Klein paneel in cockpitstijl (ritsamenvatting, zwevend venster). Coördinaten in dp; aanroeper schaalt.
+     * big = groot 7-segment/lampjes-getal met eenheid; side = klein getal ernaast; rows = regels in een display.
+     */
+    public void paintCard(Canvas c, float w, float h, String title, int titleCol,
+                          String big, String unit, int bigCol, String side, String sideLabel, int sideCol,
+                          String[][] rows, int rowCol, String hint) {
+        RectF panel = new RectF(6, 4, w - 6, h - 10);
+        bezel(c, panel);
+        float pad = 18, y = panel.top + 12;
+        if (title != null) { text(c, title, pad, y + 12, 13, titleCol); y += 24; }
+        if (big != null) {
+            float bigH = rows == null ? Math.max(24, panel.bottom - y - 30) : 52;
+            float bw = segWidth("188", bigH) + 28;
+            RectF bwR = new RectF(pad, y, pad + bw, y + bigH + 18);
+            window(c, bwR, tRed, eRed);
+            drawSegCentered(c, big, bwR, bigH, bigCol);
+            glass(c, bwR);
+            text(c, unit, bwR.right + 10, bwR.top + 16, 12, bigCol);
+            if (side != null) {
+                float sh = Math.min(22, bigH * 0.5f);
+                drawSeg(c, side, bwR.right + 10, bwR.bottom - sh - 4, sh, sideCol);
+                text(c, sideLabel, bwR.right + 16 + segWidth(side, sh), bwR.bottom - 4, 10, sideCol);
+            }
+            y = bwR.bottom + 10;
+        }
+        if (rows != null) {
+            RectF rw = new RectF(pad - 4, y, panel.right - 14, panel.bottom - (hint != null ? 30 : 14));
+            window(c, rw, dark(rowCol, 0.12f), dark(rowCol, 0.26f));
+            float rowH = (rw.height() - 10) / rows.length;
+            float segH = Math.min(22, rowH * 0.62f);
+            for (int i = 0; i < rows.length; i++) {
+                float ry = rw.top + 5 + i * rowH + (rowH - segH) / 2f;
+                text(c, rows[i][0], rw.left + 10, ry + segH * 0.8f, 11, leds ? LBL : dark(rowCol, 0.6f));
+                float ws = segWidth(rows[i][1], segH);
+                drawSeg(c, rows[i][1], rw.right - 12 - ws, ry, segH, rowCol);
+            }
+            glass(c, rw);
+        }
+        if (hint != null) {
+            p.setTextAlign(Paint.Align.RIGHT);
+            text(c, hint, panel.right - 18, panel.bottom - 12, 10, DIM);
+            p.setTextAlign(Paint.Align.LEFT);
+        }
+    }
+
     private void drawOverlay(Canvas c) { /* scanlines/vignet zitten in de achtergrond */ }
 
     // ---------------------------------------------------------------- onderdelen
