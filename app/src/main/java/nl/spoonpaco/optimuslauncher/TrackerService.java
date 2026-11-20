@@ -271,16 +271,14 @@ public class TrackerService extends Service implements LocationListener {
         lastMoveElapsed = wakeAt;
         restartGps("wakker");
         if (offMs < 0 || offMs > 2L * 60L * 1000L) {
-            Intent aa = getPackageManager().getLaunchIntentForPackage("com.carletter.car");
-            if (aa != null) {
-                ui.postDelayed(() -> {
-                    try {
-                        aa.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(aa);
-                        PowerLog.log("Android Auto geopend na wakker worden");
-                    } catch (Exception e) { PowerLog.log("Android Auto openen mislukt: " + e.getMessage()); }
-                }, 4000L);
-            }
+            // Opstartfilmpje, daarna gaat dat zelf door naar Android Auto
+            ui.postDelayed(() -> {
+                try {
+                    Intent w = new Intent(this, WakeAnimActivity.class);
+                    w.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+                    startActivity(w);
+                } catch (Exception e) { PowerLog.log("opstartfilmpje mislukt: " + e.getMessage()); }
+            }, 300L);
         }
     }
 
