@@ -96,6 +96,13 @@ public class CarLogger {
 
     public static File dir() { return dir; }
 
+    /** Na slaap: logcat-lezer opnieuw starten (het oude proces sterft soms in de slaap). */
+    public static void restart(Context c) {
+        stop();
+        start(c);
+        note("autolog herstart na wakker worden");
+    }
+
     public static void start(Context c) {
         synchronized (LOCK) {
             if (reader != null) return;
@@ -166,7 +173,8 @@ public class CarLogger {
                 BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()), 16384);
                 String line;
                 while ((line = br.readLine()) != null) {
-                    if (isNoise(line) || (!logAll && !isCarLine(line))) { linesNoise++; continue; }
+                    boolean changed = CarSignals.parse(line);
+                    if (isNoise(line) || (!logAll && (!isCarLine(line) || !changed))) { linesNoise++; continue; }
                     if (line.contains("McuDataAnalysisManager") && line.contains("getDataFrom")) {
                         lastMcu = line;
                         lastMcuTime = System.currentTimeMillis();

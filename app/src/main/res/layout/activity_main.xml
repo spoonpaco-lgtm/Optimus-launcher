@@ -95,6 +95,15 @@
         android:singleLine="true"
         android:ellipsize="end" />
 
+    <!-- Alleen zichtbaar als Android Auto niet verbindt -->
+    <Button
+        android:id="@+id/btn_offline"
+        style="@style/Tile"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:visibility="gone"
+        android:text="Offline navigeren (Organic Maps)" />
+
     <!-- Knoppen -->
     <GridLayout
         android:layout_width="match_parent"

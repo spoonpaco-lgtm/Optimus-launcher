@@ -75,6 +75,14 @@ public class Updater {
         }).start();
     }
 
+    /** Installatie starten van een APK die al als ApkProvider.FILE_NAME in filesDir staat (USB-stick). */
+    static void installFromContext(android.content.Context c) {
+        Intent i = new Intent(Intent.ACTION_VIEW);
+        i.setDataAndType(ApkProvider.URI, "application/vnd.android.package-archive");
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        c.startActivity(i);
+    }
+
     private static void install(Activity a) {
         if (!a.getPackageManager().canRequestPackageInstalls()) {
             toast(a, "Sta 'installeren' toe voor Optimus Launcher en druk dan opnieuw op Update");

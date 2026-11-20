@@ -84,6 +84,7 @@ public class MainActivity extends Activity {
         stTank = findViewById(R.id.st_tank);
 
         wireApp(R.id.btn_aa, PKG_AA, "Android Auto (CarLetter)");
+        wireApp(R.id.btn_offline, "app.organicmaps", "Organic Maps");
 
         // Contact aan (= tablet net opgestart): na 4 s vanzelf Android Auto openen, één keer per opstart
         if (!aaAutoStarted && android.os.SystemClock.elapsedRealtime() < 5L * 60L * 1000L && installed(PKG_AA)) {
@@ -141,12 +142,16 @@ public class MainActivity extends Activity {
 
     private void ensureLocationAndStartTracker() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+                && checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
                 == PackageManager.PERMISSION_GRANTED) {
             startTracker();
         } else {
             requestPermissions(new String[]{
                     Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_LOCATION);
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_LOCATION);
         }
     }
 
@@ -200,6 +205,7 @@ public class MainActivity extends Activity {
         refreshStatus(fresh);
         refreshTrip();
         maybeShowSummary();
+        updateOfflineButton();
     }
 
     private void refreshStatus(boolean gpsFresh) {
@@ -301,6 +307,37 @@ public class MainActivity extends Activity {
 
     private void wireApp(int viewId, final String pkg, final String naam) {
         findViewById(viewId).setOnClickListener(v -> launch(pkg, naam));
+    }
+
+    // ---------- offline navigeren ----------
+
+    private long lastArpCheck = 0L;
+    private boolean aaSeen = false;
+
+    /** Knop "Offline navigeren" alleen tonen als Android Auto 30 s na opstart/wakker niet verbonden is. */
+    private void updateOfflineButton() {
+        android.view.View b = findViewById(R.id.btn_offline);
+        long now = android.os.SystemClock.elapsedRealtime();
+        long since = now - TrackerService.lastWakeElapsed;
+        if (since < 30_000L || TrackerService.lastWakeElapsed == 0L) aaSeen = false;
+        if (now - lastArpCheck > 5_000L) {
+            lastArpCheck = now;
+            if (aaClientPresent()) aaSeen = true;
+        }
+        boolean show = since >= 30_000L && !aaSeen && installed("app.organicmaps");
+        int vis = show ? android.view.View.VISIBLE : android.view.View.GONE;
+        if (b.getVisibility() != vis) b.setVisibility(vis);
+    }
+
+    /** Telefoon verbonden met de Android Auto-hotspot van de tablet (192.168.43.x in ARP-tabel)? */
+    private static boolean aaClientPresent() {
+        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader("/proc/net/arp"))) {
+            String l;
+            while ((l = r.readLine()) != null) {
+                if (l.startsWith("192.168.43.") && !l.startsWith("192.168.43.1 ") && l.contains("0x2")) return true;
+            }
+        } catch (Exception ignored) { }
+        return false;
     }
 
     private boolean installed(String pkg) {

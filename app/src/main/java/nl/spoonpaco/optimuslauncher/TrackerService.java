@@ -132,6 +132,12 @@ public class TrackerService extends Service implements LocationListener {
         f.addAction(Intent.ACTION_USER_PRESENT);
         registerReceiver(powerRx, f);
         lastUpDelta = android.os.SystemClock.elapsedRealtime() - android.os.SystemClock.uptimeMillis();
+        lastWakeElapsed = android.os.SystemClock.elapsedRealtime();
+        CarSignals.listener = (name, v) -> ui.post(() -> onCarSignal(name, v));
+        android.content.IntentFilter uf = new android.content.IntentFilter();
+        uf.addAction(Intent.ACTION_MEDIA_MOUNTED);
+        uf.addDataScheme("file");
+        registerReceiver(usbRx, uf);
 
         // Zwevend snelheidsvenster over Android Auto e.d.
         ui.post(overlayTick);
@@ -167,6 +173,8 @@ public class TrackerService extends Service implements LocationListener {
         ui.removeCallbacks(overlayTick);
         ui.removeCallbacks(tripTick);
         try { unregisterReceiver(powerRx); } catch (Exception ignored) { }
+        try { unregisterReceiver(usbRx); } catch (Exception ignored) { }
+        CarSignals.listener = null;
         PowerLog.log("dienst gestopt");
         removeBubble();
         CarLogger.stop();
@@ -229,8 +237,36 @@ public class TrackerService extends Service implements LocationListener {
     };
 
     /** Na wakker worden: GPS opnieuw aanvragen (sommige ROMs laten hem uit) en evt. Android Auto openen. */
+    /** Tijdstip (elapsedRealtime) van laatste opstart of wakker worden; launcher gebruikt dit voor "Offline navigeren". */
+    public static volatile long lastWakeElapsed = 0L;
+
+    private void onCarSignal(String name, int v) {
+        PowerLog.log(name + " -> " + v + (CarSignals.volts > 0 ? String.format(java.util.Locale.US, " (%.2f V)", CarSignals.volts) : ""));
+        if (name.equals("handrem") && v == 1 && speedKmh < MOVING_KMH
+                && !store.tripEnded() && store.tripKm() >= MIN_TRIP_KM) {
+            finishTrip("handrem erop");
+        }
+        if (name.equals("contact") && v == 0
+                && !store.tripEnded() && store.tripKm() >= MIN_TRIP_KM) {
+            finishTrip("contact uit");
+        }
+    }
+
+    // ---------- USB-stick ----------
+
+    private final android.content.BroadcastReceiver usbRx = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            if (i.getData() == null) return;
+            final String path = i.getData().getPath();
+            PowerLog.log("USB-stick: " + path);
+            new Thread(() -> UsbStick.handle(TrackerService.this, path, store), "usb-stick").start();
+        }
+    };
+
     private void onWake(long offMs) {
         wakeAt = android.os.SystemClock.elapsedRealtime();
+        lastWakeElapsed = wakeAt;
+        CarLogger.restart(this);
         fixSinceWake = false;
         lastMoveElapsed = wakeAt;
         restartGps("wakker");
