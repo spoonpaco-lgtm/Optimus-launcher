@@ -77,6 +77,10 @@ public class DebugActivity extends Activity {
             Toast.makeText(this, CarLogger.logAll ? "Autolog: alles (debug)" : "Autolog: alleen autodata", Toast.LENGTH_SHORT).show();
             recreate();
         });
+        addButton(buttons, "Meldingtoegang", () -> {
+            try { startActivity(new android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")); }
+            catch (Exception e) { toast("Scherm niet beschikbaar; via adb geven"); }
+        });
         addButton(buttons, "Update zoeken", () -> Updater.check(this, true));
         addButton(buttons, "Crash wissen", () -> {
             //noinspection ResultOfMethodCallIgnored
@@ -113,6 +117,7 @@ public class DebugActivity extends Activity {
         StringBuilder s = new StringBuilder();
 
         // ---- GPS ----
+        s.append(MediaProbe.report(this));
         s.append("== GPS ==\n");
         LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         boolean enabled = false;
