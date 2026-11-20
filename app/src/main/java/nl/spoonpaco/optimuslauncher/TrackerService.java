@@ -272,11 +272,36 @@ public class TrackerService extends Service implements LocationListener {
         powerPrefs().edit().putLong("el", el).putLong("slept", el - android.os.SystemClock.uptimeMillis()).apply();
     }
 
-    /** Opstartfilmpje ("Optimus Black, Ready"), daarna gaat dat zelf door naar Android Auto. Max 1x per 2 min. */
+    /**
+     * Opstartfilmpje ("Optimus Black, Ready"). Wordt NIET meteen gespeeld: de MCU houdt het scherm
+     * bij lage accu soms een minuut donker. We zetten het filmpje "klaar" en spelen het pas zodra
+     * de MCU meldt dat de verlichting echt aan is.
+     */
     private void playWakeAnim(String why) {
         long now = android.os.SystemClock.elapsedRealtime();
-        if (lastAnim > 0 && now - lastAnim < 120_000L) return;
-        lastAnim = now;
+        powerPrefs().edit().putLong("wantAnimEl", now).putString("wantWhy", why).apply();
+        if (CarSignals.screen == 1 && screenOnSince > 0 && now - screenOnSince > 1_000L) {
+            startWakeAnim(why + ", scherm was al aan");
+            return;
+        }
+        PowerLog.log("opstartfilmpje klaar, wacht op scherm aan (" + why + ")");
+        // Vangnet: geen schermmelding en de motor draait -> MCU heeft het scherm aan.
+        ui.postDelayed(() -> {
+            if (powerPrefs().getLong("wantAnimEl", 0) == now && CarSignals.screen == -1 && CarSignals.volts >= 13.3) {
+                startWakeAnim(why + ", geen schermmelding maar motor draait");
+            }
+        }, 15_000L);
+    }
+
+    private long screenOnSince = 0L;
+
+    private void startWakeAnim(String why) {
+        long now = android.os.SystemClock.elapsedRealtime();
+        android.content.SharedPreferences sp = powerPrefs();
+        long last = sp.getLong("lastAnimEl", 0);
+        sp.edit().putLong("wantAnimEl", 0).apply();
+        if (last > 0 && last <= now && now - last < 20_000L) return;
+        sp.edit().putLong("lastAnimEl", now).apply();
         PowerLog.log("opstartfilmpje: " + why);
         ui.postDelayed(() -> {
             try {
@@ -293,10 +318,16 @@ public class TrackerService extends Service implements LocationListener {
         if (name.equals("scherm")) {
             long now = android.os.SystemClock.elapsedRealtime();
             long offAt = powerPrefs().getLong("screenOffEl", 0);
-            if (v == 0) powerPrefs().edit().putLong("screenOffEl", now).apply();
+            if (v == 0) { screenOnSince = 0; powerPrefs().edit().putLong("screenOffEl", now).apply(); }
             else {
-                if (offAt > 0 && now - offAt > 5_000L) {
-                    playWakeAnim("scherm aan na " + PowerLog.dur(now - offAt) + " donker");
+                screenOnSince = now;
+                long want = powerPrefs().getLong("wantAnimEl", 0);
+                if (want > 0 && want <= now && now - want < 10L * 60_000L) {
+                    startWakeAnim(powerPrefs().getString("wantWhy", "") + ", scherm aan na " + PowerLog.dur(now - want));
+                    lastWakeElapsed = now;
+                    restartGps("scherm aan");
+                } else if (offAt > 0 && now - offAt > 5_000L) {
+                    startWakeAnim("scherm aan na " + PowerLog.dur(now - offAt) + " donker");
                     lastWakeElapsed = now;
                     restartGps("scherm aan");
                 }
@@ -307,7 +338,11 @@ public class TrackerService extends Service implements LocationListener {
         if (name.equals("contact")) {
             long now = android.os.SystemClock.elapsedRealtime();
             long offAt = powerPrefs().getLong("contactOffEl", 0);
-            if (v == 0) powerPrefs().edit().putLong("contactOffEl", now).apply();
+            if (v == 0) {
+                // Contact uit = scherm gaat uit, ook als we die melding missen (FlyAudio schiet ons af).
+                CarSignals.screen = 0; screenOnSince = 0;
+                powerPrefs().edit().putLong("contactOffEl", now).putLong("screenOffEl", now).apply();
+            }
             else if (v == 1) {
                 if (offAt > 0 && now - offAt > 5_000L) {
                     playWakeAnim("contact aan na " + PowerLog.dur(now - offAt));
