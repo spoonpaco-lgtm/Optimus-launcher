@@ -65,8 +65,8 @@ public class TripLogActivity extends Activity {
         top.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         toggleRow = new LinearLayout(this);
         top.addView(toggleRow);
-        top.addView(choice("HIGH SCORES", false, v -> showHighscores()), btnLp(140));
-        top.addView(choice(Lang.t("NAAR USB", "TO USB"), false, v -> export()), btnLp(130));
+        top.addView(choice("HIGH SCORES", false, v -> Dialogs.highscores(this, theme)), btnLp(140));
+        top.addView(choice(Lang.t("NAAR USB", "TO USB"), false, v -> Dialogs.export(this)), btnLp(130));
         top.addView(choice(Lang.t("SLUITEN", "CLOSE"), true, v -> finish()), btnLp(120));
         root.addView(top);
 
@@ -128,9 +128,9 @@ public class TripLogActivity extends Activity {
         maint = label("", theme.accent, 14);
         maint.setLetterSpacing(0.04f);
         mrow.addView(maint, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        mrow.addView(choice(Lang.t("HIER OPSLAAN", "SAVE HERE"), false, v -> saveHere()), btnLp(130));
-        mrow.addView(choice(Lang.t("LOCATIES", "PLACES"), false, v -> showLocations()), btnLp(110));
-        mrow.addView(choice(Lang.t("ONDERHOUD", "SERVICE"), false, v -> maintenanceDialog()), btnLp(120));
+        mrow.addView(choice(Lang.t("HIER OPSLAAN", "SAVE HERE"), false, v -> Dialogs.saveHere(this, this::showTrip)), btnLp(130));
+        mrow.addView(choice(Lang.t("LOCATIES", "PLACES"), false, v -> Dialogs.locationList(this, this::showTrip)), btnLp(110));
+        mrow.addView(choice(Lang.t("ONDERHOUD", "SERVICE"), false, v -> Dialogs.maintenance(this, store, this::showMaintenance)), btnLp(120));
         right.addView(mrow);
 
         body.addView(right, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.62f));
@@ -222,168 +222,6 @@ public class TripLogActivity extends Activity {
     private static String days(int n) {
         return n >= 0 ? String.format(Locale.US, Lang.t("over %d dagen", "in %d days"), n)
                 : String.format(Locale.US, Lang.t("%d dagen te laat!", "%d days overdue!"), -n);
-    }
-
-    // ---------- vaste locaties ----------
-
-    private void saveHere() {
-        Locations.Loc l = Locations.addHere(this);
-        if (l == null) { Toast.makeText(this, Lang.t("Nog geen GPS-positie", "No GPS position yet"), Toast.LENGTH_SHORT).show(); return; }
-        Toast.makeText(this, Lang.t("Opgeslagen als ", "Saved as ") + l.label()
-                + Lang.t(" — adres volgt zodra er internet is", " — address follows when online"), Toast.LENGTH_LONG).show();
-        Geo.fillMissing(this);
-        WorkLog.write(this);
-        showTrip();
-    }
-
-    private void showLocations() {
-        final List<Locations.Loc> locs = Locations.all(this);
-        if (locs.isEmpty()) {
-            Toast.makeText(this, Lang.t("Nog geen locaties. Druk ter plekke op HIER OPSLAAN.", "No places yet. Press SAVE HERE on site."), Toast.LENGTH_LONG).show();
-            return;
-        }
-        String[] items = new String[locs.size()];
-        for (int i = 0; i < locs.size(); i++) {
-            Locations.Loc l = locs.get(i);
-            items[i] = l.name + (l.addr.isEmpty() ? Lang.t("  (adres volgt)", "  (address pending)") : "  —  " + l.addr);
-        }
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(Lang.t("Locaties (tik = naam wijzigen)", "Places (tap = rename)"))
-                .setItems(items, (dd, i) -> renameLocation(locs, i))
-                .setNegativeButton(Lang.t("Sluiten", "Close"), null)
-                .show();
-    }
-
-    private void renameLocation(final List<Locations.Loc> locs, final int i) {
-        final EditText e = new EditText(this);
-        e.setText(locs.get(i).name);
-        e.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(Lang.t("Naam (bv. Thuis, school, klant)", "Name (e.g. Home, school, client)"))
-                .setView(e)
-                .setPositiveButton(Lang.t("Opslaan", "Save"), (dd, w) -> {
-                    locs.get(i).name = e.getText().toString().trim();
-                    Locations.save(this, locs); WorkLog.write(this); showTrip();
-                })
-                .setNeutralButton(Lang.t("Verwijderen", "Delete"), (dd, w) -> {
-                    locs.remove(i); Locations.save(this, locs); WorkLog.write(this); showTrip();
-                })
-                .setNegativeButton(Lang.t("Annuleren", "Cancel"), null)
-                .show();
-    }
-
-    private void showHighscores() {
-        RetroCard card = new RetroCard(this, theme);
-        card.setSizeDp(460, 420);
-        card.title = "HIGH SCORES";
-        card.rows = TripLog.highscores(this);
-        card.hint = Lang.t("TIK = OK", "TAP = OK");
-        final AlertDialog dlg = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar)
-                .setView(card).create();
-        card.setOnClickListener(v -> dlg.dismiss());
-        dlg.show();
-        if (dlg.getWindow() != null) dlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-    }
-
-    private void export() {
-        try {
-            String p = TripLog.export(this);
-            Toast.makeText(this, Lang.t("Rittenlog + spoonpaco-ritten opgeslagen in: ", "Trip log + spoonpaco-ritten saved in: ") + p, Toast.LENGTH_LONG).show();
-        } catch (Exception e) {
-            Toast.makeText(this, Lang.t("Exporteren mislukt: ", "Export failed: ") + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
-    }
-
-    // ---------- onderhoud instellen ----------
-
-    private EditText focused;
-
-    private void maintenanceDialog() {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding((int) (16 * d), (int) (8 * d), (int) (16 * d), 0);
-        SimpleDateFormat df = new SimpleDateFormat("dd-MM-yyyy", Locale.US);
-        final EditText odo = field(Lang.t("Kilometerstand nu", "Odometer now"), store.odometer() > 0 ? String.valueOf(store.odometer()) : "");
-        final EditText oilKm = field(Lang.t("Km-stand bij laatste olie", "Odometer at last oil change"), store.oilKm() > 0 ? String.valueOf(store.oilKm()) : "");
-        final EditText oilDate = field(Lang.t("Datum laatste olie (dd-mm-jjjj)", "Date of last oil change (dd-mm-yyyy)"), store.oilDate() > 0 ? df.format(new Date(store.oilDate())) : "");
-        final EditText apk = field(Lang.t("APK verloopt op (dd-mm-jjjj)", "MOT due (dd-mm-yyyy)"), store.apkDate() > 0 ? df.format(new Date(store.apkDate())) : "");
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout fields = new LinearLayout(this);
-        fields.setOrientation(LinearLayout.VERTICAL);
-        fields.addView(odo); fields.addView(oilKm); fields.addView(oilDate); fields.addView(apk);
-        row.addView(fields, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        row.addView(keypad(), new LinearLayout.LayoutParams((int) (240 * d), ViewGroup.LayoutParams.WRAP_CONTENT));
-        box.addView(row);
-        focused = odo; odo.requestFocus();
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(Lang.t("Onderhoud", "Service"))
-                .setView(box)
-                .setPositiveButton(Lang.t("Opslaan", "Save"), (dd, w) -> {
-                    int o = num(odo), ok = num(oilKm);
-                    long od = date(oilDate), ad = date(apk);
-                    if (o > 0) store.setOdometer(o);
-                    if (ok > 0 || od > 0) store.setOil(ok > 0 ? ok : store.oilKm(), od > 0 ? od : store.oilDate());
-                    if (ad > 0) store.setApk(ad);
-                    showMaintenance();
-                })
-                .setNegativeButton(Lang.t("Annuleren", "Cancel"), null)
-                .show();
-    }
-
-    private EditText field(String hint, String val) {
-        EditText e = new EditText(this);
-        e.setHint(hint);
-        e.setText(val);
-        e.setTextSize(16);
-        e.setInputType(InputType.TYPE_CLASS_NUMBER);
-        e.setKeyListener(DigitsKeyListener.getInstance("0123456789-"));
-        e.setShowSoftInputOnFocus(false);
-        e.setOnFocusChangeListener((v, has) -> { if (has) focused = (EditText) v; });
-        return e;
-    }
-
-    private View keypad() {
-        android.widget.GridLayout g = new android.widget.GridLayout(this);
-        g.setColumnCount(3);
-        g.setPadding((int) (10 * d), 0, 0, 0);
-        for (String k : new String[]{"1", "2", "3", "4", "5", "6", "7", "8", "9", "-", "0", "⌫"}) {
-            android.widget.Button b = new android.widget.Button(this);
-            b.setText(k);
-            b.setTextSize(17);
-            b.setTextColor(0xFFFFB21A);
-            b.setBackgroundResource(R.drawable.key_bg);
-            b.setPadding(0, 0, 0, 0);
-            android.widget.GridLayout.LayoutParams lp = new android.widget.GridLayout.LayoutParams(
-                    android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
-                    android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f));
-            lp.width = 0; lp.height = (int) (40 * d);
-            lp.setMargins((int) (3 * d), (int) (3 * d), (int) (3 * d), (int) (3 * d));
-            b.setOnClickListener(v -> {
-                EditText f = focused;
-                if (f == null) return;
-                android.text.Editable t = f.getText();
-                if (k.equals("⌫")) { if (t.length() > 0) t.delete(t.length() - 1, t.length()); }
-                else t.append(k);
-                f.setSelection(f.getText().length());
-            });
-            g.addView(b, lp);
-        }
-        return g;
-    }
-
-    private static int num(EditText e) {
-        try { return Integer.parseInt(e.getText().toString().replace("-", "").trim()); } catch (Exception x) { return -1; }
-    }
-
-    private static long date(EditText e) {
-        try {
-            String[] p = e.getText().toString().trim().split("-");
-            Calendar c = Calendar.getInstance();
-            c.clear();
-            c.set(Integer.parseInt(p[2]), Integer.parseInt(p[1]) - 1, Integer.parseInt(p[0]), 12, 0);
-            return c.getTimeInMillis();
-        } catch (Exception x) { return 0L; }
     }
 
     // ---------- stijl ----------

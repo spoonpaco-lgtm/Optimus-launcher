@@ -118,6 +118,13 @@ public final class BatteryHealth {
         level = lv; reason = why;
     }
 
+    /** Laatste meting van een soort ("rest", "crank", "charge"), of -1. */
+    public static float last(String key) {
+        float[] a = get(key);
+        for (float v : a) if (v > 0) return v;
+        return -1f;
+    }
+
     public static String report() {
         return "accu: " + (level == 0 ? "goed" : level == 1 ? "LET OP — " + reason : "SLECHT — " + reason) + "\n"
                 + "  startdip (V): " + (sp == null ? "" : sp.getString("crank", "-")) + "\n"

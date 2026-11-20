@@ -637,6 +637,111 @@ public class CockpitView extends View {
 
     private static String fmt0(float v) { return v <= 0 ? "--" : String.valueOf(Math.round(v)); }
 
+
+    // ---------------------------------------------------------------- tekenhulpen voor andere schermen (menu)
+    // Zelfde bezels, displays, scanlines en lampjes als de cockpit, zodat alles één stijl heeft.
+
+    public boolean uiLeds() { return leds; }
+    public int uiRed() { return RED; } public int uiAmb() { return AMB; } public int uiGrn() { return GRN; }
+    public int uiBlu() { return BLU; } public int uiYel() { return YEL; }
+
+    public void uiBackground(Canvas c, float w, float h) {
+        c.drawColor(0xFF040405);
+        p.setShader(new RadialGradient(w / 2f, 0, w * 0.7f, bgTop, 0xFF040405, Shader.TileMode.CLAMP));
+        c.drawRect(0, 0, w, h, p);
+        p.setShader(null);
+        p.setColor(rib);
+        for (float x = 0; x < w; x += 26) c.drawRect(x, 0, x + 2, h, p);
+    }
+
+    /** Scanlines + vignet over het hele scherm (als laatste tekenen). */
+    public void uiScanlines(Canvas c, float w, float h) {
+        p.setColor(0x06FFFFFF);
+        for (float y = 0; y < h; y += 4) c.drawRect(0, y, w, y + 1, p);
+        p.setShader(new RadialGradient(w / 2f, h * 0.45f, w * 0.75f,
+                new int[]{0x00000000, 0x00000000, 0x88000000}, new float[]{0f, 0.6f, 1f}, Shader.TileMode.CLAMP));
+        c.drawRect(0, 0, w, h, p);
+        p.setShader(null);
+    }
+
+    public void uiBezel(Canvas c, RectF r) { bezel(c, r); }
+
+    /** Display-venster in kleur col (verzonken); scanlines/glas komen met uiGlass. */
+    public void uiWindow(Canvas c, RectF r, int col) {
+        if (leds) {   // Old-skool: geen display, alleen een dunne lijst
+            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1); p.setColor(0xFF2C2C35);
+            c.drawRoundRect(r, 4, 4, p); p.setStyle(Paint.Style.FILL);
+            return;
+        }
+        window(c, r, dark(col, 0.14f), dark(col, 0.30f));
+    }
+
+    public void uiGlass(Canvas c, RectF r) { glass(c, r); }
+
+    public void uiLamp(Canvas c, float cx, float cy, float R, int col, boolean on) { lampAt(c, cx, cy, R, col, on); }
+
+    public void uiText(Canvas c, String t, float x, float y, float size, int col, Paint.Align a) {
+        p.setTextAlign(a);
+        text(c, t, x, y, size, col);
+        p.setTextAlign(Paint.Align.LEFT);
+    }
+
+    /** 7-segment (of lampjes in Old-skool), rechts uitgelijnd op xRight. */
+    public void uiSegRight(Canvas c, String v, float xRight, float y, float h, int col) {
+        drawSeg(c, v, xRight - segWidth(v, h), y, h, col);
+    }
+
+    public void uiSeg(Canvas c, String v, float x, float y, float h, int col) { drawSeg(c, v, x, y, h, col); }
+
+    /** LED-balk zonder eigen venster. scheme 2 = rood (leeg) -> groen (vol). */
+    public void uiBar(Canvas c, float x1, float y, float x2, float h, int n, int lit, int scheme) {
+        bar(c, x1, y, x2, h, n, lit, scheme, 0, 0);
+    }
+
+    /** Drukknop in cockpitstijl: bezel met schaduw, lampje met chromen ring, tekst in de toetskleur. */
+    public void uiButton(Canvas c, RectF r, String label, boolean on, int key, float size) {
+        glow.setColor(0xCC000000);
+        glow.setMaskFilter(new BlurMaskFilter(8, BlurMaskFilter.Blur.NORMAL));
+        c.drawRoundRect(r.left + 1, r.top + 5, r.right - 1, r.bottom + 4, 7, 7, glow);
+        glow.setMaskFilter(null);
+        p.setShader(new LinearGradient(0, r.top, 0, r.bottom, 0xFF26262D, 0xFF0D0D10, Shader.TileMode.CLAMP));
+        c.drawRoundRect(r, 7, 7, p);
+        p.setShader(null);
+        if (on) { p.setColor((key & 0x00FFFFFF) | 0x1E000000); c.drawRoundRect(r, 7, 7, p); }
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.5f);
+        p.setColor(on ? dark(key, 0.75f) : 0xFF34343E);
+        c.drawRoundRect(r, 7, 7, p);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(0x22FFFFFF);
+        c.drawRect(r.left + 8, r.top + 1, r.right - 8, r.top + 2, p);
+        float R = Math.min(10f, r.height() * 0.2f);
+        lampAt(c, r.left + 14 + R, r.centerY(), R, key, on);
+        text(c, label, r.left + 14 + 2 * R + 12, r.centerY() + size * 0.36f, size, on ? key : LBL);
+        if (on) {
+            glow.setColor(key); glow.setMaskFilter(new BlurMaskFilter(5, BlurMaskFilter.Blur.NORMAL));
+            c.drawRect(r.left + 14, r.bottom - 5, r.right - 14, r.bottom - 3, glow);
+            glow.setMaskFilter(null);
+            p.setColor(key); c.drawRect(r.left + 14, r.bottom - 5, r.right - 14, r.bottom - 3.5f, p);
+        }
+    }
+
+    /** Tabblad: titel + ondertitel; gekozen = display met scanlines en brandend lampje. */
+    public void uiTab(Canvas c, RectF r, String title, String sub, boolean on, int key) {
+        if (on && !leds) {
+            window(c, r, dark(key, 0.16f), dark(key, 0.55f));
+        } else {
+            p.setShader(new LinearGradient(0, r.top, 0, r.bottom, 0xFF1D1D23, 0xFF0C0C0F, Shader.TileMode.CLAMP));
+            c.drawRoundRect(r, 7, 7, p);
+            p.setShader(null);
+            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.5f); p.setColor(on ? key : 0xFF2C2C35);
+            c.drawRoundRect(r, 7, 7, p); p.setStyle(Paint.Style.FILL);
+        }
+        lampAt(c, r.left + 26, r.centerY(), 11, key, on);
+        text(c, title, r.left + 50, r.top + r.height() * 0.46f, 20, on ? key : 0xFFA0A0AA);
+        text(c, sub, r.left + 50, r.top + r.height() * 0.78f, 10, on ? dark(key, 0.8f) : 0xFF5F5F69);
+        if (on && !leds) glass(c, r);
+    }
+
     // ---------------------------------------------------------------- 7-segment
 
     private static final String DIG = "0123456789- ";

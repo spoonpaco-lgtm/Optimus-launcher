@@ -348,117 +348,54 @@ public class MainActivity extends Activity {
         recreate();
     }
 
+    private android.app.Dialog menuDlg;
+    private MenuView menuView;
+
+    /** Menu met tabbladen, getekend in cockpitstijl (MenuView). */
     private void showMenu() {
-        final float d = getResources().getDisplayMetrics().density;
-        final AlertDialog[] dlg = new AlertDialog[1];
-        final Runnable close = () -> { if (dlg[0] != null) dlg[0].dismiss(); };
         final android.content.SharedPreferences op = getSharedPreferences("optimus", MODE_PRIVATE);
-
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.HORIZONTAL);
-        int pad = (int) (16 * d);
-        box.setPadding(pad, pad, pad, pad);
-        box.setBackgroundColor(0xFF0A0A0D);
-
-        // ---- links: thema's in een 2x2-raster ----
-        LinearLayout left = new LinearLayout(this);
-        left.setOrientation(LinearLayout.VERTICAL);
-        left.addView(menuLabel(Lang.t("THEMA", "THEME"), theme.accent, d));
-        LinearLayout gridRow = null;
-        for (int i = 0; i < Theme.ALL.length; i++) {
-            final Theme t = Theme.ALL[i];
-            if (i % 2 == 0) {
-                gridRow = new LinearLayout(this);
-                gridRow.setOrientation(LinearLayout.HORIZONTAL);
-                left.addView(gridRow);
-            }
-            LinearLayout card = new LinearLayout(this);
-            card.setOrientation(LinearLayout.VERTICAL);
-            card.setPadding((int) (10 * d), (int) (10 * d), (int) (10 * d), (int) (10 * d));
-            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable(
-                    android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xFF1A1A20, 0xFF0B0B0E});
-            bg.setCornerRadius(8 * d);
-            bg.setStroke((int) ((t == theme ? 3 : 1) * d), t == theme ? t.key : 0xFF2C2C35);
-            card.setBackground(bg);
-            LinearLayout sw = new LinearLayout(this);
-            sw.setOrientation(LinearLayout.HORIZONTAL);
-            for (int c : new int[]{t.speed, t.accent, t.trip, t.key}) {
-                View v = new View(this);
-                android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
-                g.setCornerRadius(2 * d); g.setColor(c);
-                v.setBackground(g);
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, (int) (10 * d), 1f);
-                lp.setMargins((int) (2 * d), 0, (int) (2 * d), 0);
-                sw.addView(v, lp);
-            }
-            card.addView(sw);
-            TextView name = menuLabel(t.name.toUpperCase(), t.key, d);
-            name.setTextSize(14);
-            name.setPadding((int) (2 * d), (int) (8 * d), 0, (int) (2 * d));
-            card.addView(name);
-            TextView desc = new TextView(this);
-            desc.setText(Lang.en ? themeDescEn(t.id) : t.desc);
-            desc.setTextColor(0xFF8E8E9A);
-            desc.setTextSize(11);
-            desc.setMaxLines(2);
-            card.addView(desc);
-            card.setOnClickListener(v -> {
+        final MainActivity act = this;
+        menuView = new MenuView(this, theme, store, new MenuView.Host() {
+            @Override public void close() { if (menuDlg != null) menuDlg.dismiss(); }
+            @Override public void fuel() { close(); showFuelDialog(); }
+            @Override public void tripLog() { close(); startActivity(new Intent(act, TripLogActivity.class)); }
+            @Override public void highscores() { Dialogs.highscores(act, theme); }
+            @Override public void export() { Dialogs.export(act); }
+            @Override public void saveHere() { Dialogs.saveHere(act, () -> menuView.invalidate()); }
+            @Override public void location(int i) { Dialogs.renameLocation(act, i, () -> menuView.invalidate()); }
+            @Override public void maintenance() { Dialogs.maintenance(act, store, () -> menuView.invalidate()); }
+            @Override public void pickTheme(Theme t) {
                 op.edit().putString("theme", t.id).apply();
                 applyTheme(t);
-                close.run();
-                toast(Lang.t("Thema: ", "Theme: ") + t.name);
-            });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, (int) (96 * d), 1f);
-            lp.setMargins((int) (5 * d), (int) (5 * d), (int) (5 * d), (int) (5 * d));
-            gridRow.addView(card, lp);
-        }
-
-        // ---- rechts: instellingen als keuzeknoppen ----
-        LinearLayout right = new LinearLayout(this);
-        right.setOrientation(LinearLayout.VERTICAL);
-        right.setPadding((int) (16 * d), 0, 0, 0);
-
-        right.addView(menuLabel(Lang.t("TAAL", "LANGUAGE"), theme.accent, d));
-        right.addView(choiceRow(d,
-                choice("NEDERLANDS", !Lang.en, d, v -> { close.run(); if (Lang.en) { Lang.set(this, false); languageChanged(); } }),
-                choice("ENGLISH", Lang.en, d, v -> { close.run(); if (!Lang.en) { Lang.set(this, true); languageChanged(); } })));
-
-        boolean startAA = op.getBoolean("startAA", false);
-        right.addView(menuLabel(Lang.t("BIJ CONTACT AAN", "ON IGNITION"), theme.accent, d));
-        right.addView(choiceRow(d,
-                choice("LAUNCHER", !startAA, d, v -> { op.edit().putBoolean("startAA", false).apply(); close.run();
-                    toast(Lang.t("Bij contact aan: launcher", "On ignition: launcher")); }),
-                choice("ANDROID AUTO", startAA, d, v -> { op.edit().putBoolean("startAA", true).apply(); close.run();
-                    toast(Lang.t("Bij contact aan: Android Auto", "On ignition: Android Auto")); })));
-
-        right.addView(menuLabel(Lang.t("SYSTEEM", "SYSTEM"), theme.accent, d));
-        right.addView(choiceRow(d,
-                choice(Lang.t("UPDATE ZOEKEN", "CHECK UPDATE"), false, d, v -> { close.run(); Updater.check(this, true); }),
-                choice("DEBUG", false, d, v -> { close.run(); startActivity(new Intent(this, DebugActivity.class)); })));
-
-        View spacer = new View(this);
-        right.addView(spacer, new LinearLayout.LayoutParams(1, 0, 1f));
-        TextView ver = new TextView(this);
-        String vn = "";
-        try { vn = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
-        ver.setText("OPTIMUS LAUNCHER " + vn);
-        ver.setTextColor(0xFF5A5A66);
-        ver.setTextSize(11);
-        ver.setLetterSpacing(0.15f);
-        ver.setPadding((int) (6 * d), (int) (8 * d), 0, (int) (4 * d));
-        right.addView(ver);
-        right.addView(choiceRow(d, choice(Lang.t("SLUITEN", "CLOSE"), true, d, v -> close.run())));
-
-        box.addView(left, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.2f));
-        box.addView(right, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-
-        // vangnet: past het scherm toch niet, dan kun je scrollen
-        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
-        scroll.addView(box);
-        dlg[0] = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar)
-                .setView(scroll).create();
-        dlg[0].show();
-        if (dlg[0].getWindow() != null) dlg[0].getWindow().setLayout((int) (940 * d), LinearLayout.LayoutParams.WRAP_CONTENT);
+                menuView.setTheme(t);
+            }
+            @Override public void setLanguage(boolean en) {
+                if (en == Lang.en) return;
+                Lang.set(act, en);
+                close();
+                languageChanged();
+            }
+            @Override public void setStartAA(boolean aa) { op.edit().putBoolean("startAA", aa).apply(); }
+            @Override public void setOverlay(boolean on) { store.setOverlayEnabled(on); }
+            @Override public void update() { close(); Updater.check(act, true); }
+            @Override public void debug() { close(); startActivity(new Intent(act, DebugActivity.class)); }
+            @Override public boolean startAA() { return op.getBoolean("startAA", false); }
+            @Override public boolean overlay() { return store.overlayEnabled(); }
+            @Override public String version() {
+                try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return ""; }
+            }
+            @Override public String status() {
+                int net = netState();
+                return Lang.t("VERSIE ", "VERSION ") + version() + "\n"
+                        + "INTERNET: " + (net == 2 ? "OK" : net == 1 ? Lang.t("VERBONDEN, GEEN INTERNET", "CONNECTED, NO INTERNET") : Lang.t("GEEN", "NONE")) + "\n"
+                        + "GPS: " + TrackerService.satsUsed + Lang.t(" SATELLIETEN", " SATELLITES") + "\n"
+                        + "AUTOLOG: " + (CarLogger.state == 2 ? Lang.t("ACTIEF", "ACTIVE") : CarLogger.state == 1 ? Lang.t("ALLEEN GPS", "GPS ONLY") : Lang.t("UIT", "OFF")) + "\n"
+                        + Lang.t("ACCU: ", "BATTERY: ") + (CarSignals.volts > 0 ? String.format(java.util.Locale.US, "%.2f V", CarSignals.volts) : "--");
+            }
+        });
+        menuDlg = new android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        menuDlg.setContentView(menuView);
+        menuDlg.show();
     }
 
     /** Rij van gelijke keuzeknoppen. */
