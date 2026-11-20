@@ -189,6 +189,7 @@ public class CockpitView extends View {
 
     /** Verzonken displayvenster met getinte gloed, metalen rand, scanlines en glasreflectie. */
     private void window(Canvas c, RectF r, int tint, int edge) {
+        if (leds) return; // Old-skool: lampjes zitten los op het paneel, geen display/scanlines
         glow.setColor(0xB3000000);
         glow.setMaskFilter(new BlurMaskFilter(8, BlurMaskFilter.Blur.NORMAL));
         c.drawRoundRect(r.left, r.top + 4, r.right, r.bottom + 6, 4, 4, glow);
@@ -210,6 +211,7 @@ public class CockpitView extends View {
 
     /** Scanlines + glasreflectie óver de cijfers in een venster. */
     private void glass(Canvas c, RectF r) {
+        if (leds) return;
         p.setColor(0x4D000000);
         for (float y = r.top + 3; y < r.bottom - 2; y += 3) c.drawRect(r.left + 3, y, r.right - 3, y + 1, p);
         p.setShader(new LinearGradient(0, r.top + 4, 0, r.top + 4 + r.height() * 0.36f, 0x17FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP));
@@ -365,29 +367,42 @@ public class CockpitView extends View {
         }
         float y = r.top + 176;
         text(c, "DEZE RIT", x, y, 12, GRN);
-        float rowH = Math.min(38, (r.bottom - 84 - y) / 4f);
+        // eigen display voor de rit
+        RectF tw = new RectF(x - 6, y + 8, r.right - 14, r.bottom - 86);
+        window(c, tw, dark(GRN, 0.12f), dark(GRN, 0.26f));
+        float rowH = (tw.height() - 14) / 4f;
         String[][] rows = {
                 {"KM", String.format(Locale.US, "%.1f", tripKm)},
                 {"TIJD", String.format(Locale.US, "%d:%02d", tripMinutes / 60, tripMinutes % 60)},
                 {"LITER", String.format(Locale.US, "%.2f", tripL)},
                 {"EURO", tripCost >= 0 ? String.format(Locale.US, "%.2f", tripCost) : "--"}};
-        float segH = Math.min(24, rowH * 0.66f);
+        float segH = Math.min(22, rowH * 0.62f);
         for (int i = 0; i < 4; i++) {
-            float ry = y + 16 + i * rowH;
-            text(c, rows[i][0], x, ry + segH * 0.75f, 11, LBL);
+            float ry = tw.top + 7 + i * rowH + (rowH - segH) / 2f;
+            text(c, rows[i][0], tw.left + 10, ry + segH * 0.78f, 11, leds ? LBL : dark(GRN, 0.6f));
             float wSeg = segWidth(rows[i][1], segH);
-            drawSeg(c, rows[i][1], r.right - 20 - wSeg, ry, segH, GRN);
+            drawSeg(c, rows[i][1], tw.right - 12 - wSeg, ry, segH, GRN);
         }
-        // accu
-        float ay = r.bottom - 54;
-        text(c, "ACCU", x, ay, 11, BLU);
+        glass(c, tw);
+        // accu: balk + spanning samen in één display
+        float ay = r.bottom - 76;
+        text(c, "ACCU", x, ay + 10, 11, BLU);
+        RectF aw = new RectF(x - 6, ay + 18, r.right - 14, r.bottom - 16);
+        window(c, aw, dark(BLU, 0.12f), dark(BLU, 0.26f));
         // 11,5 V (leeg, rood) .. 14,5 V (laden, groen)
         int litSeg = volts < 0 ? 0 : Math.max(1, Math.min(10, Math.round((volts - 11.5f) / 3.0f * 10f)));
-        bar(c, x, ay + 6, x + 150, 10, 10, litSeg, 3, tAmb, eAmb);
         String v = volts < 0 ? "--.-" : String.format(Locale.US, "%.1f", volts);
-        float vw = segWidth(v, 24);
-        drawSeg(c, v, r.right - 38 - vw, ay - 6, 24, BLU);
-        text(c, "V", r.right - 30, ay + 18, 12, BLU);
+        float vH = Math.min(22, aw.height() - 14);
+        float vw = segWidth(v, vH);
+        bar(c, aw.left + 6, aw.centerY() - 12, aw.right - vw - 46, 10, 10, litSeg, 3, 0, 0);
+        drawSeg(c, v, aw.right - 30 - vw, aw.centerY() - vH / 2f, vH, BLU);
+        text(c, "V", aw.right - 22, aw.centerY() + vH / 2f, 11, BLU);
+        glass(c, aw);
+    }
+
+    private static int dark(int col, float f) {
+        int r = (int) (((col >> 16) & 0xFF) * f), g = (int) (((col >> 8) & 0xFF) * f), b = (int) ((col & 0xFF) * f);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
     private void drawFuelPanel(Canvas c) {
@@ -415,19 +430,22 @@ public class CockpitView extends View {
             text(c, String.valueOf(6 + i * 4), x + bw * i / 4f, sy, 10, DIM);
         }
         p.setTextAlign(Paint.Align.LEFT);
-        // tank
-        float ty = r.bottom - 70;
-        text(c, "TANK", x, ty + 14, 11, YEL);
-        String rk = rangeKm < 0 ? "---" : String.valueOf(rangeKm);
-        float rw = segWidth(rk, 28);
-        drawSeg(c, rk, r.right - 50 - rw, ty - 6, 28, rangeKm >= 0 && rangeKm < 60 ? WR : GRN);
-        text(c, "KM", r.right - 42, ty + 20, 11, GRN);
-        int litDots = tankL < 0 ? 0 : Math.max(1, Math.min(12, Math.round(tankL / 57f * 12f)));
-        text(c, "L", x, ty + 46, 11, DIM);
-        bar(c, x + 22, ty + 30, r.right - 40, 14, 12, litDots, 3, tAmb, eAmb);
+        // tank: balk + bereik samen in één display
+        float ty = r.bottom - 76;
+        text(c, "TANK", x, ty + 10, 11, YEL);
         p.setTextAlign(Paint.Align.RIGHT);
-        text(c, "V", r.right - 20, ty + 46, 11, DIM);
+        text(c, tankL < 0 ? "TANKEN INVOEREN" : String.format(Locale.US, "~%.0f / 57 L", tankL), r.right - 20, ty + 10, 10, DIM);
         p.setTextAlign(Paint.Align.LEFT);
+        RectF kw = new RectF(x - 6, ty + 18, r.right - 14, r.bottom - 16);
+        window(c, kw, tAmb, eAmb);
+        String rk = rangeKm < 0 ? "---" : String.valueOf(rangeKm);
+        float rH = Math.min(24, kw.height() - 14);
+        float rw = segWidth(rk, rH);
+        int litDots = tankL < 0 ? 0 : Math.max(1, Math.min(12, Math.round(tankL / 57f * 12f)));
+        bar(c, kw.left + 6, kw.centerY() - 13, kw.right - rw - 52, 12, 12, litDots, 3, 0, 0);
+        drawSeg(c, rk, kw.right - 36 - rw, kw.centerY() - rH / 2f, rH, rangeKm >= 0 && rangeKm < 60 ? WR : GRN);
+        text(c, "KM", kw.right - 28, kw.centerY() + rH / 2f, 10, GRN);
+        glass(c, kw);
     }
 
     private void drawOverlay(Canvas c) { /* scanlines/vignet zitten in de achtergrond */ }
@@ -445,7 +463,8 @@ public class CockpitView extends View {
     /** LED-balk in een verzonken glazen venster (thematint), met scanlines en glasreflectie. */
     private void bar(Canvas c, float x1, float y, float x2, float h, int n, int lit, int scheme, int tint, int edge) {
         RectF wr = new RectF(x1, y, x2, y + h + 14);
-        window(c, wr, tint, edge);
+        boolean framed = tint != 0;
+        if (framed) window(c, wr, tint, edge);
         y += 2;
         x1 += 2; x2 -= 2;
         float gap = 3, sw = (x2 - x1 - 10 - gap * (n - 1)) / n;
@@ -457,7 +476,6 @@ public class CockpitView extends View {
                 float cx = x1 + 5 + i * (sw + gap) + sw / 2f;
                 lampAt(c, cx, cy, R, col, i < lit);
             }
-            glass(c, wr);
             return;
         }
         for (int i = 0; i < n; i++) {
@@ -470,7 +488,7 @@ public class CockpitView extends View {
             if (i < lit) glowRect(c, sx, y + 5, sx + sw, y + 5 + h, col);
             else { p.setColor((col & 0x00FFFFFF) | 0x16000000); c.drawRect(sx, y + 5, sx + sw, y + 5 + h, p); }
         }
-        glass(c, wr);
+        if (framed) glass(c, wr);
     }
 
     private static int barColor(int scheme, int i, int n) {
