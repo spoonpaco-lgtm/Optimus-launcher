@@ -176,8 +176,8 @@ public class TripLogActivity extends Activity {
     private void showTrip() {
         if (trips.isEmpty()) {
             route.set(null, Lang.t("NOG GEEN RITTEN", "NO TRIPS YET"));
-            details.setText(Lang.t("Een rit wordt opgeslagen zodra hij is afgesloten (contact uit of 5 min stilstand).",
-                    "A trip is saved when it ends (ignition off or 5 min stopped)."));
+            details.setText(Lang.t("Een rit wordt opgeslagen zodra hij is afgesloten (contact uit of 10 min stilstand).",
+                    "A trip is saved when it ends (ignition off or 10 min stopped)."));
             return;
         }
         TripLog.Trip t = trips.get(sel);

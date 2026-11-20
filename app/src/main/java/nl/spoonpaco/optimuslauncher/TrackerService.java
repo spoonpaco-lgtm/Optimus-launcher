@@ -212,7 +212,7 @@ public class TrackerService extends Service implements LocationListener {
 
     private static final String CHANNEL_SUM = "ritsamenvatting";
     private static final float MIN_TRIP_KM = 0.3f;
-    private static final long STOP_MS = 5L * 60L * 1000L;
+    private static final long STOP_MS = 10L * 60L * 1000L; // rit afsluiten na 10 min stilstand
     private volatile long lastMoveElapsed = 0L;
 
     // ---------- aan/uit/slaap ----------
