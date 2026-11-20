@@ -86,12 +86,12 @@ public class DebugActivity extends Activity {
         addButton(buttons, "Sluiten", this::finish);
         root.addView(buttons);
 
-        ScrollView sv = new ScrollView(this);
+        sv = new ScrollView(this);
+        sv.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
         text = new TextView(this);
         text.setTypeface(Typeface.MONOSPACE);
         text.setTextSize(13);
         text.setTextColor(getColor(R.color.fg));
-        text.setTextIsSelectable(true);
         sv.addView(text);
         root.addView(sv, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -197,8 +197,13 @@ public class DebugActivity extends Activity {
         // ---- Crash ----
         s.append("== Laatste crash ==\n").append(crash());
 
+        // scrollpositie vasthouden: anders springt het scherm elke seconde terug naar boven
+        final int y = sv.getScrollY();
         text.setText(s.toString());
+        sv.post(() -> sv.scrollTo(0, y));
     }
+
+    private ScrollView sv;
 
     // ---------- helpers ----------
 

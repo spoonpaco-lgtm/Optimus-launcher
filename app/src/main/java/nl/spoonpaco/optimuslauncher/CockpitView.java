@@ -345,8 +345,9 @@ public class CockpitView extends View {
         // accu
         float ay = r.bottom - 54;
         text(c, "ACCU", x, ay, 11, BLU);
-        int litDots = volts < 0 ? 0 : Math.max(0, Math.min(8, Math.round((volts - 11.5f) / 3.0f * 8f)));
-        for (int i = 0; i < 8; i++) dot(c, x + 6 + i * 17, ay + 18, 5, BLU, i < litDots);
+        // 11,5 V (leeg, rood) .. 14,5 V (laden, groen)
+        int litSeg = volts < 0 ? 0 : Math.max(1, Math.min(10, Math.round((volts - 11.5f) / 3.0f * 10f)));
+        bar(c, x, ay + 8, x + 150, 10, 10, litSeg, 3);
         String v = volts < 0 ? "--.-" : String.format(Locale.US, "%.1f", volts);
         float vw = segWidth(v, 24);
         drawSeg(c, v, r.right - 38 - vw, ay - 6, 24, BLU);
@@ -387,11 +388,7 @@ public class CockpitView extends View {
         text(c, "KM", r.right - 42, ty + 20, 11, GRN);
         int litDots = tankL < 0 ? 0 : Math.max(1, Math.min(12, Math.round(tankL / 57f * 12f)));
         text(c, "L", x, ty + 46, 11, DIM);
-        float dx = x + 26, dw = (r.right - 46 - dx) / 11f;
-        for (int i = 0; i < 12; i++) {
-            int cc = i < 2 ? RED : (i < 4 ? AMB : YEL);
-            dot(c, dx + i * dw, ty + 42, 7, cc, i < litDots);
-        }
+        bar(c, x + 22, ty + 32, r.right - 40, 14, 12, litDots, 3);
         p.setTextAlign(Paint.Align.RIGHT);
         text(c, "V", r.right - 20, ty + 46, 11, DIM);
         p.setTextAlign(Paint.Align.LEFT);
@@ -417,7 +414,8 @@ public class CockpitView extends View {
             int col;
             if (scheme == 0) col = i < n * 14 / 22 ? GRN : (i < n * 18 / 22 ? AMB : RED);
             else if (scheme == 1) col = i < n / 2 ? GRN : (i < n * 13 / 16 ? AMB : RED);
-            else col = i < n * 3 / 16 ? RED : (i < n * 7 / 16 ? AMB : GRN);
+            else if (scheme == 2) col = i < n * 3 / 16 ? RED : (i < n * 7 / 16 ? AMB : GRN);
+            else col = i < Math.max(1, n / 5) ? RED : (i < Math.max(2, n * 2 / 5) ? AMB : GRN);
             float sx = x1 + 5 + i * (sw + gap);
             if (i < lit) glowRect(c, sx, y + 5, sx + sw, y + 5 + h, col);
             else { p.setColor(0xFF17171C); c.drawRect(sx, y + 5, sx + sw, y + 5 + h, p); }
