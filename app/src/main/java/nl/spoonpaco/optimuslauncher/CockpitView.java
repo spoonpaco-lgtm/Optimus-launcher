@@ -310,8 +310,8 @@ public class CockpitView extends View {
         text(c, "KM/U", w.right + 12, w.bottom - 10, 16, RED);
         float by = w.bottom + 14;
         int lit = speed < 0 ? 0 : Math.min(22, Math.round(speed / 160f * 22f));
-        bar(c, x, by, r.right - 20, 16, 22, lit, 0);
-        float sy = by + 40;
+        bar(c, x, by, r.right - 20, 16, 22, lit, 0, tRed, eRed);
+        float sy = by + 44;
         float bw = r.right - 20 - x;
         for (int i = 0; i <= 4; i++) {
             p.setTextAlign(i == 0 ? Paint.Align.LEFT : i == 4 ? Paint.Align.RIGHT : Paint.Align.CENTER);
@@ -361,7 +361,7 @@ public class CockpitView extends View {
         text(c, "ACCU", x, ay, 11, BLU);
         // 11,5 V (leeg, rood) .. 14,5 V (laden, groen)
         int litSeg = volts < 0 ? 0 : Math.max(1, Math.min(10, Math.round((volts - 11.5f) / 3.0f * 10f)));
-        bar(c, x, ay + 8, x + 150, 10, 10, litSeg, 3);
+        bar(c, x, ay + 6, x + 150, 10, 10, litSeg, 3, tAmb, eAmb);
         String v = volts < 0 ? "--.-" : String.format(Locale.US, "%.1f", volts);
         float vw = segWidth(v, 24);
         drawSeg(c, v, r.right - 38 - vw, ay - 6, 24, BLU);
@@ -386,8 +386,8 @@ public class CockpitView extends View {
         float by = w.bottom + 14;
         // balk: 6..22 km/l, zuinig = groen (rechts)
         int lit = kml < 0 ? 0 : Math.max(0, Math.min(16, Math.round((kml - 6f) / 16f * 16f)));
-        bar(c, x, by, r.right - 20, 13, 16, lit, 2);
-        float sy = by + 36, bw = r.right - 20 - x;
+        bar(c, x, by, r.right - 20, 13, 16, lit, 2, tAmb, eAmb);
+        float sy = by + 40, bw = r.right - 20 - x;
         for (int i = 0; i <= 4; i++) {
             p.setTextAlign(i == 0 ? Paint.Align.LEFT : i == 4 ? Paint.Align.RIGHT : Paint.Align.CENTER);
             text(c, String.valueOf(6 + i * 4), x + bw * i / 4f, sy, 10, DIM);
@@ -402,7 +402,7 @@ public class CockpitView extends View {
         text(c, "KM", r.right - 42, ty + 20, 11, GRN);
         int litDots = tankL < 0 ? 0 : Math.max(1, Math.min(12, Math.round(tankL / 57f * 12f)));
         text(c, "L", x, ty + 46, 11, DIM);
-        bar(c, x + 22, ty + 32, r.right - 40, 14, 12, litDots, 3);
+        bar(c, x + 22, ty + 30, r.right - 40, 14, 12, litDots, 3, tAmb, eAmb);
         p.setTextAlign(Paint.Align.RIGHT);
         text(c, "V", r.right - 20, ty + 46, 11, DIM);
         p.setTextAlign(Paint.Align.LEFT);
@@ -420,9 +420,12 @@ public class CockpitView extends View {
         glass(c, r);
     }
 
-    private void bar(Canvas c, float x1, float y, float x2, float h, int n, int lit, int scheme) {
-        p.setColor(0xFF060608);
-        c.drawRoundRect(x1, y, x2, y + h + 10, 3, 3, p);
+    /** LED-balk in een verzonken glazen venster (thematint), met scanlines en glasreflectie. */
+    private void bar(Canvas c, float x1, float y, float x2, float h, int n, int lit, int scheme, int tint, int edge) {
+        RectF wr = new RectF(x1, y, x2, y + h + 14);
+        window(c, wr, tint, edge);
+        y += 2;
+        x1 += 2; x2 -= 2;
         float gap = 3, sw = (x2 - x1 - 10 - gap * (n - 1)) / n;
         for (int i = 0; i < n; i++) {
             int col;
@@ -432,8 +435,9 @@ public class CockpitView extends View {
             else col = i < Math.max(1, n / 5) ? WR : (i < Math.max(2, n * 2 / 5) ? WA : WG);
             float sx = x1 + 5 + i * (sw + gap);
             if (i < lit) glowRect(c, sx, y + 5, sx + sw, y + 5 + h, col);
-            else { p.setColor(0xFF17171C); c.drawRect(sx, y + 5, sx + sw, y + 5 + h, p); }
+            else { p.setColor((col & 0x00FFFFFF) | 0x16000000); c.drawRect(sx, y + 5, sx + sw, y + 5 + h, p); }
         }
+        glass(c, wr);
     }
 
     private void glowRect(Canvas c, float l, float t, float r, float b, int col) {
