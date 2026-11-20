@@ -35,7 +35,9 @@ public class CockpitView extends View {
     public int rangeKm = -1;
     public float tankL = -1f;
     public float volts = -1f;
-    public boolean lContact, lMotor, lLicht, lAmp, lAuto, lLog;
+    public boolean lContact, lMotor, lLicht, lTrips, lAuto, lLog;
+    /** Accubewaker: 0 goed, 1 let op (geel), 2 slecht (rood). */
+    public int accuWarn = 0;
 
     public Listener listener;
 
@@ -354,9 +356,9 @@ public class CockpitView extends View {
         float x = r.left + 20;
         // lampjes 3 x 2
         float bx = r.left + 18, bw = r.width() - 36;
-        String[] n = Lang.en ? new String[]{"IGNITION", "ENGINE", "LIGHTS", "AMPLIFIER", "AUTO", "LOG"} : new String[]{"CONTACT", "MOTOR", "LICHT", "VERSTERKER", "AUTO", "LOG"};
+        String[] n = Lang.en ? new String[]{"IGNITION", "ENGINE", "LIGHTS", "TRIPS", "AUTO", "LOG"} : new String[]{"CONTACT", "MOTOR", "LICHT", "RITTEN", "AUTO", "LOG"};
         int[] col = {0xFFF4E04D, WG, WA, 0xFFB66BFF, 0xFF2F8CFF, WG};
-        boolean[] on = {lContact, lMotor, lLicht, lAmp, lAuto, lLog};
+        boolean[] on = {lContact, lMotor, lLicht, lTrips, lAuto, lLog};
         for (int i = 0; i < 6; i++) {
             float cx = bx + bw * (i % 3 * 2 + 1) / 6f;
             float cy = r.top + 18 + (i < 3 ? 34 : 98);
@@ -387,6 +389,7 @@ public class CockpitView extends View {
         // accu: balk + spanning samen in één display
         float ay = r.bottom - 76;
         text(c, Lang.t("ACCU", "BATTERY"), x, ay + 10, 11, BLU);
+        if (accuWarn > 0) warnTriangle(c, r.right - 32, ay + 2, 18, accuWarn == 2 ? WR : WA, (System.currentTimeMillis() / 600) % 2 == 0);
         RectF aw = new RectF(x - 6, ay + 18, r.right - 14, r.bottom - 16);
         window(c, aw, dark(BLU, 0.12f), dark(BLU, 0.26f));
         // 11,5 V (leeg, rood) .. 14,5 V (laden, groen)
@@ -398,6 +401,21 @@ public class CockpitView extends View {
         drawSeg(c, v, aw.right - 30 - vw, aw.centerY() - vH / 2f, vH, BLU);
         text(c, "V", aw.right - 22, aw.centerY() + vH / 2f, 11, BLU);
         glass(c, aw);
+    }
+
+    /** Waarschuwingsdriehoek met uitroepteken (knippert als blink = false -> gedimd). */
+    private void warnTriangle(Canvas c, float cx, float top, float h, int col, boolean bright) {
+        android.graphics.Path t = new android.graphics.Path();
+        float w = h * 1.15f;
+        t.moveTo(cx, top); t.lineTo(cx + w / 2f, top + h); t.lineTo(cx - w / 2f, top + h); t.close();
+        Paint q = new Paint(Paint.ANTI_ALIAS_FLAG);
+        int fill = bright ? col : dark(col, 0.35f);
+        if (bright) { q.setColor(col); q.setMaskFilter(new android.graphics.BlurMaskFilter(h * 0.45f, android.graphics.BlurMaskFilter.Blur.NORMAL)); c.drawPath(t, q); q.setMaskFilter(null); }
+        q.setColor(fill); c.drawPath(t, q);
+        q.setColor(0xFF0A0A0D);
+        q.setStrokeWidth(h * 0.12f); q.setStrokeCap(Paint.Cap.ROUND);
+        c.drawLine(cx, top + h * 0.36f, cx, top + h * 0.66f, q);
+        c.drawCircle(cx, top + h * 0.82f, h * 0.07f, q);
     }
 
     private static int dark(int col, float f) {

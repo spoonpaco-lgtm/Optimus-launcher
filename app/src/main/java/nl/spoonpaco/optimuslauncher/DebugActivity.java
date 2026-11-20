@@ -121,6 +121,7 @@ public class DebugActivity extends Activity {
         StringBuilder s = new StringBuilder();
 
         // ---- GPS ----
+        s.append("== Accu ==\n").append(BatteryHealth.report()).append('\n');
         s.append(MediaProbe.report(this));
         s.append("== GPS ==\n");
         LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);

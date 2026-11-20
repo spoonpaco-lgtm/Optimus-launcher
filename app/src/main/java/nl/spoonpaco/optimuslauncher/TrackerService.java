@@ -123,6 +123,7 @@ public class TrackerService extends Service implements LocationListener {
                 .build();
         startForeground(1, n);
 
+        BatteryHealth.init(this);
         CarLogger.start(this);
         BtMedia.start(this);
         PowerLog.init(this);
@@ -424,6 +425,7 @@ public class TrackerService extends Service implements LocationListener {
 
     private void finishTrip(String why) {
         store.endTrip();
+        try { TripLog.end(this, store, last); } catch (Exception e) { CarLogger.note("rittenlog fout: " + e.getMessage()); }
         CarLogger.note("rit afgesloten (" + why + "): " + store.summaryShort());
         try {
             Intent open = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -500,13 +502,14 @@ public class TrackerService extends Service implements LocationListener {
         if (moving) {
             lastMoveElapsed = android.os.SystemClock.elapsedRealtime();
             // Vorige rit afgesloten (stilstand of herstart) -> nu begint een nieuwe
-            if (store.tripEnded()) store.startNewTrip();
+            if (store.tripEnded()) { store.startNewTrip(); TripLog.begin(this, store, loc); }
             if (last != null) {
                 float km = last.distanceTo(loc) / 1000f;
                 float hours = (loc.getTime() - last.getTime()) / 3_600_000f;
                 // sprongen en rare tijden negeren
                 if (km > 0f && km < 0.5f && hours > 0f && hours < 0.01f) {
                     store.addSegment(km, hours, kmh, now);
+                    TripLog.point(this, loc);
                 } else {
                     store.touchMove(now);
                 }

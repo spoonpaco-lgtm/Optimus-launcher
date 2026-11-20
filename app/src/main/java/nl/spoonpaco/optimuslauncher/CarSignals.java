@@ -63,6 +63,7 @@ public final class CarSignals {
                     boolean big = volts < 0 || Math.abs(v - volts) >= 0.5f;
                     volts = v;
                     voltsTime = System.currentTimeMillis();
+                    BatteryHealth.onVolts(v);
                     return big;
                 }
                 return false;
@@ -82,6 +83,7 @@ public final class CarSignals {
             default: old = lights; lights = v; break;
         }
         if (old == v) return false;
+        if (name.equals("contact")) BatteryHealth.onContact(v);
         Listener l = listener;
         if (l != null) l.onSignal(name, v);
         return true;

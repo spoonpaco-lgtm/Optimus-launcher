@@ -139,6 +139,7 @@ public class MainActivity extends Activity {
             }
         });
         findViewById(R.id.btn_menu).setOnClickListener(v -> showMenu());
+        findViewById(R.id.btn_trips).setOnClickListener(v -> startActivity(new Intent(this, TripLogActivity.class)));
         // Lang indrukken op een icoon = naam tonen (behalve AA: dat is afspelen/pauze)
         for (int id : new int[]{R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_apps,
                 R.id.btn_settings, R.id.btn_menu}) {
@@ -265,10 +266,10 @@ public class MainActivity extends Activity {
     private Theme theme = Theme.LED;
 
     private static final int[] KEY_IDS = {R.id.btn_aa, R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel,
-            R.id.btn_apps, R.id.btn_settings, R.id.btn_menu};
-    private static final String[] KEY_TEXT = {"AUTO", "FM", "EQ", "TANK", "APPS", "SET", "MENU"};
+            R.id.btn_trips, R.id.btn_apps, R.id.btn_settings, R.id.btn_menu};
+    private static final String[] KEY_TEXT = {"AUTO", "FM", "EQ", "TANK", "RIT", "APPS", "SET", "MENU"};
     private static final int[] KEY_ICON = {R.drawable.ic_aa, R.drawable.ic_radio, R.drawable.ic_eq, R.drawable.ic_fuel,
-            R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_menu};
+            R.drawable.ic_trip, R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_menu};
 
     private void applyTheme(Theme t) {
         theme = t;
@@ -529,7 +530,8 @@ public class MainActivity extends Activity {
         c.lContact = CarSignals.contact == 1 || (CarSignals.contact < 0 && c.volts > 0);
         c.lMotor = CarSignals.engineRunning();
         c.lLicht = CarSignals.lights == 1;
-        c.lAmp = CarSignals.mcu04 == 1;
+        c.lTrips = store.tripLogOn();
+        c.accuWarn = BatteryHealth.level;
         c.lAuto = aaSeenRecently;
         c.lLog = CarLogger.state == 2;
         c.invalidate();
@@ -778,12 +780,18 @@ public class MainActivity extends Activity {
         price.setOnClickListener(v -> { price.setText(""); });
         final CheckBox full = new CheckBox(this);
         full.setText(Lang.t("Tank is nu vol (57 l)", "Tank is now full (57 L)"));
-        full.setTextSize(18);
+        full.setTextSize(15);
 
-        box.addView(liters);
-        box.addView(price);
-        box.addView(full);
-        box.addView(keypad(liters, price));
+        LinearLayout fields = new LinearLayout(this);
+        fields.setOrientation(LinearLayout.VERTICAL);
+        fields.addView(liters);
+        fields.addView(price);
+        fields.addView(full);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.addView(fields, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(keypad(liters, price), new LinearLayout.LayoutParams((int) (230 * getResources().getDisplayMetrics().density), LinearLayout.LayoutParams.WRAP_CONTENT));
+        box.addView(row);
 
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle(Lang.t("Tanken", "Refuel"))
@@ -808,7 +816,7 @@ public class MainActivity extends Activity {
     private EditText numberField(String hint) {
         EditText e = new EditText(this);
         e.setHint(hint);
-        e.setTextSize(20);
+        e.setTextSize(16);
         e.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         e.setKeyListener(DigitsKeyListener.getInstance("0123456789.,"));
         e.setShowSoftInputOnFocus(false); // eigen toetsenblok met punt
@@ -825,20 +833,21 @@ public class MainActivity extends Activity {
         float d = getResources().getDisplayMetrics().density;
         android.widget.GridLayout g = new android.widget.GridLayout(this);
         g.setColumnCount(3);
-        g.setPadding(0, (int) (8 * d), 0, 0);
+        g.setPadding((int) (10 * d), 0, 0, 0);
         String[] keys = {"1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"};
         for (String k : keys) {
             android.widget.Button b = new android.widget.Button(this);
             b.setText(k);
-            b.setTextSize(24);
+            b.setTextSize(17);
+            b.setPadding(0, 0, 0, 0);
             b.setTextColor(0xFFFFB21A);
             b.setBackgroundResource(R.drawable.key_bg);
             android.widget.GridLayout.LayoutParams lp = new android.widget.GridLayout.LayoutParams(
                     android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
                     android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f));
             lp.width = 0;
-            lp.height = (int) (56 * d);
-            lp.setMargins((int) (4 * d), (int) (4 * d), (int) (4 * d), (int) (4 * d));
+            lp.height = (int) (38 * d);
+            lp.setMargins((int) (3 * d), (int) (3 * d), (int) (3 * d), (int) (3 * d));
             b.setOnClickListener(v -> {
                 EditText f = focusedField != null ? focusedField : first;
                 android.text.Editable t = f.getText();

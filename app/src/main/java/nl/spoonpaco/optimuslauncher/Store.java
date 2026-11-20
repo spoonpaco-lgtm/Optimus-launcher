@@ -209,6 +209,7 @@ public class Store {
         e.putFloat("tripMax", Math.max(tripMaxKmh(), kmh));
         e.putFloat("tripL", tripLiters() + liters);
         e.putFloat("kmSinceFull", p.getFloat("kmSinceFull", 0f) + km);
+        e.putFloat("totalKm", p.getFloat("totalKm", 0f) + km);
         e.putFloat("estSinceFull", p.getFloat("estSinceFull", 0f) + liters);
         float t = tankLiters();
         if (t >= 0) e.putFloat("tank", Math.max(0f, t - liters));
@@ -229,4 +230,69 @@ public class Store {
     public void touchMove(long now) {
         p.edit().putLong("lastMove", now).apply();
     }
+
+    /** Cijfers van de laatst afgesloten rit: km, uren, gem, max, liter, kosten (-1 = onbekend). */
+    public float[] summaryNumbers() {
+        return new float[]{p.getFloat("sumKm", 0f), p.getFloat("sumH", 0f), p.getFloat("sumAvg", 0f),
+                p.getFloat("sumMax", 0f), p.getFloat("sumL", 0f), p.getFloat("sumCost", -1f)};
+    }
+
+    // ---- onderhoud ----
+
+    public static final int OIL_KM = 15000;      // Toyota: olie elke 15.000 km
+    public static final int OIL_MONTHS = 12;     // of elk jaar
+
+    /** Door GPS gereden km sinds installatie. */
+    public float totalKm() { return p.getFloat("totalKm", 0f); }
+
+    /** Kilometerstand (ingevoerd + sindsdien gereden), of -1 als nooit ingevoerd. */
+    public int odometer() {
+        float base = p.getFloat("odoBase", -1f);
+        if (base < 0) return -1;
+        return Math.round(base + totalKm() - p.getFloat("odoAt", 0f));
+    }
+
+    public void setOdometer(int km) {
+        p.edit().putFloat("odoBase", km).putFloat("odoAt", totalKm()).apply();
+    }
+
+    public int oilKm() { return p.getInt("oilKm", -1); }
+    public long oilDate() { return p.getLong("oilDate", 0L); }
+    public long apkDate() { return p.getLong("apkDate", 0L); }
+    public void setOil(int km, long date) { p.edit().putInt("oilKm", km).putLong("oilDate", date).apply(); }
+    public void setApk(long date) { p.edit().putLong("apkDate", date).apply(); }
+
+    /** Km tot de volgende olieverversing, of Integer.MIN_VALUE als onbekend. */
+    public int oilKmLeft() {
+        int odo = odometer(), oil = oilKm();
+        if (odo < 0 || oil < 0) return Integer.MIN_VALUE;
+        return oil + OIL_KM - odo;
+    }
+
+    /** Dagen tot de volgende olieverversing op datum, of Integer.MIN_VALUE. */
+    public int oilDaysLeft(long now) {
+        long d = oilDate();
+        if (d <= 0) return Integer.MIN_VALUE;
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        c.setTimeInMillis(d); c.add(java.util.Calendar.MONTH, OIL_MONTHS);
+        return (int) Math.floor((c.getTimeInMillis() - now) / 86_400_000d);
+    }
+
+    public int apkDaysLeft(long now) {
+        long d = apkDate();
+        if (d <= 0) return Integer.MIN_VALUE;
+        return (int) Math.floor((d - now) / 86_400_000d);
+    }
+
+    /** Is er onderhoud nodig of bijna nodig? (olie binnen 500 km of 14 dagen, APK binnen 30 dagen) */
+    public boolean serviceDue(long now) {
+        int k = oilKmLeft(), od = oilDaysLeft(now), a = apkDaysLeft(now);
+        return (k != Integer.MIN_VALUE && k <= 500) || (od != Integer.MIN_VALUE && od <= 14)
+                || (a != Integer.MIN_VALUE && a <= 30);
+    }
+
+    // ---- rittenlog aan/uit ----
+
+    public boolean tripLogOn() { return p.getBoolean("tripLog", true); }
+    public void setTripLogOn(boolean on) { p.edit().putBoolean("tripLog", on).apply(); }
 }
