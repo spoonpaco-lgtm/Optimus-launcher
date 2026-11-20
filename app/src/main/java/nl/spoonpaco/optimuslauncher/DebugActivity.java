@@ -71,10 +71,14 @@ public class DebugActivity extends Activity {
             store.startNewTrip();
             toast("Rit gereset");
         });
-        addButton(buttons, CarLogger.logAll ? "Log: alles" : "Log: alleen auto", () -> {
-            CarLogger.logAll = !CarLogger.logAll;
-            getSharedPreferences("optimus", MODE_PRIVATE).edit().putBoolean("logAll", CarLogger.logAll).apply();
-            Toast.makeText(this, CarLogger.logAll ? "Autolog: alles (debug)" : "Autolog: alleen autodata", Toast.LENGTH_SHORT).show();
+        addButton(buttons, CarLogger.logAll ? "Meetrit stoppen" : "Meetrit (15 min)", () -> {
+            if (CarLogger.logAll) {
+                CarLogger.stopLogAll(this, "handmatig");
+                toast("Autolog: alleen autodata");
+            } else {
+                CarLogger.startMeetrit(this);
+                toast("Meetrit: 15 min alles loggen, daarna vanzelf terug");
+            }
             recreate();
         });
         addButton(buttons, "Meldingtoegang", () -> {
@@ -179,7 +183,10 @@ public class DebugActivity extends Activity {
         s.append("status: ").append(st == 2 ? "volledig" : st == 1 ? "alleen GPS (geen READ_LOGS?)" : "uit")
                 .append(CarLogger.full ? "  — DAG VOL" : "").append('\n');
         s.append(String.format(L, "bestand: %s  (%.1f MB)\n", CarLogger.currentFile, CarLogger.currentBytes / 1048576f));
-        s.append("modus: ").append(CarLogger.logAll ? "alles (debug)" : "alleen autodata").append('\n');
+        long left = CarLogger.meetritUntil - android.os.SystemClock.elapsedRealtime();
+        s.append("modus: ").append(!CarLogger.logAll ? "alleen autodata"
+                : CarLogger.meetritUntil > 0 ? "MEETRIT, alles loggen — nog " + Math.max(0, left / 60000) + ":" + String.format(L, "%02d", Math.max(0, left / 1000) % 60)
+                : "alles (debug)").append('\n');
         s.append(String.format(L, "regels: %d bewaard, %d weggefilterd\n",
                 CarLogger.linesWritten, CarLogger.linesNoise));
         s.append("laatste MCU-bericht: ").append(age(now, CarLogger.lastMcuTime)).append('\n');

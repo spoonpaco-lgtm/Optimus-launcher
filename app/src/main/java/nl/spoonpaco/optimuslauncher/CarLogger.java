@@ -73,6 +73,33 @@ public class CarLogger {
 
     /** Alleen-auto-modus (standaard): bewaar alleen regels met autodata. */
     public static volatile boolean logAll = false;
+    /** Meetrit: "alles loggen" tot dit moment (elapsedRealtime), daarna vanzelf terug naar alleen autodata. 0 = geen meetrit. */
+    public static volatile long meetritUntil = 0L;
+    private static Context appCtx;
+
+    /** Meetrit starten: 15 minuten alles loggen. */
+    public static void startMeetrit(Context c) {
+        logAll = true;
+        meetritUntil = android.os.SystemClock.elapsedRealtime() + 15L * 60_000L;
+        c.getSharedPreferences("optimus", Context.MODE_PRIVATE).edit()
+                .putBoolean("logAll", true).putLong("meetritUntil", meetritUntil).apply();
+        note("meetrit gestart: 15 min alles loggen");
+    }
+
+    /** Meetrit (of handmatig "alles") stoppen. */
+    public static void stopLogAll(Context c, String why) {
+        logAll = false;
+        meetritUntil = 0L;
+        c.getSharedPreferences("optimus", Context.MODE_PRIVATE).edit()
+                .putBoolean("logAll", false).putLong("meetritUntil", 0L).apply();
+        note("terug naar alleen autodata (" + why + ")");
+    }
+
+    private static void checkMeetrit() {
+        if (meetritUntil > 0 && android.os.SystemClock.elapsedRealtime() > meetritUntil && appCtx != null) {
+            stopLogAll(appCtx, "meetrit klaar");
+        }
+    }
 
     private static final String[] KEEP = {
             "mcu", "gpio", "acc-syn", "ill-chk", "parking", "back-de", "carservice",
@@ -107,7 +134,16 @@ public class CarLogger {
     public static void start(Context c) {
         synchronized (LOCK) {
             if (reader != null) return;
-            logAll = c.getSharedPreferences("optimus", Context.MODE_PRIVATE).getBoolean("logAll", false);
+            appCtx = c.getApplicationContext();
+            android.content.SharedPreferences sp = c.getSharedPreferences("optimus", Context.MODE_PRIVATE);
+            logAll = sp.getBoolean("logAll", false);
+            meetritUntil = sp.getLong("meetritUntil", 0L);
+            // meetrit van voor een herstart (andere klok) of al verlopen -> uit
+            long el = android.os.SystemClock.elapsedRealtime();
+            if (meetritUntil > 0 && (el > meetritUntil || meetritUntil - el > 16L * 60_000L)) {
+                logAll = false; meetritUntil = 0L;
+                sp.edit().putBoolean("logAll", false).putLong("meetritUntil", 0L).apply();
+            }
             File base = c.getExternalFilesDir(null);
             if (base == null) base = c.getFilesDir();
             dir = new File(base, "carlog");
@@ -175,6 +211,7 @@ public class CarLogger {
                 String line;
                 while ((line = br.readLine()) != null) {
                     boolean changed = CarSignals.parse(line);
+                    if (meetritUntil > 0) checkMeetrit();
                     if (isNoise(line) || (!logAll && (!isCarLine(line) || !changed))) { linesNoise++; continue; }
                     if (line.contains("McuDataAnalysisManager") && line.contains("getDataFrom")) {
                         lastMcu = line;
