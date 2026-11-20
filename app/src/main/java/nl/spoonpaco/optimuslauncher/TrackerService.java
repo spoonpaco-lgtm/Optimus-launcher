@@ -565,6 +565,7 @@ public class TrackerService extends Service implements LocationListener {
         float d = getResources().getDisplayMetrics().density;
         bubbleTheme = getSharedPreferences("optimus", MODE_PRIVATE).getString("theme", "led");
         bubble = new RetroCard(this, Theme.byId(bubbleTheme));
+        bubble.scale = 0.65f;
         bubble.setSizeDp(250, 104);
 
         bp = new android.view.WindowManager.LayoutParams(

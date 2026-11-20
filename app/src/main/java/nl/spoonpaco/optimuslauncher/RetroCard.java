@@ -9,6 +9,8 @@ public class RetroCard extends View {
     private final CockpitView painter;
     private final float d;
     public float wDp = 300, hDp = 200;
+    /** Schaal van het hele paneel (zwevend venster = 0,65 = 35% kleiner). */
+    public float scale = 1f;
     public String title, big, unit = null, side, sideLabel = "KM/L", hint;
     public String[][] rows;
     public int titleCol, bigCol, sideCol, rowCol;
@@ -34,12 +36,12 @@ public class RetroCard extends View {
     }
 
     @Override protected void onMeasure(int wm, int hm) {
-        setMeasuredDimension((int) (wDp * d), (int) (hDp * d));
+        setMeasuredDimension((int) (wDp * d * scale), (int) (hDp * d * scale));
     }
 
     @Override protected void onDraw(Canvas c) {
         c.save();
-        c.scale(d, d);
+        c.scale(d * scale, d * scale);
         painter.paintCard(c, wDp, hDp, title, titleCol, big, unit != null ? unit : Lang.t("KM/U", "KM/H"), bigCol, side, sideLabel, sideCol, rows, rowCol, hint);
         c.restore();
     }
