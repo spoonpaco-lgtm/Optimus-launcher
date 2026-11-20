@@ -332,27 +332,37 @@ public class MainActivity extends Activity {
     }
 
     private void showMenu() {
-        float d = getResources().getDisplayMetrics().density;
+        final float d = getResources().getDisplayMetrics().density;
+        final AlertDialog[] dlg = new AlertDialog[1];
+        final Runnable close = () -> { if (dlg[0] != null) dlg[0].dismiss(); };
+        final android.content.SharedPreferences op = getSharedPreferences("optimus", MODE_PRIVATE);
+
         LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        int pad = (int) (20 * d);
+        box.setOrientation(LinearLayout.HORIZONTAL);
+        int pad = (int) (16 * d);
         box.setPadding(pad, pad, pad, pad);
         box.setBackgroundColor(0xFF0A0A0D);
-        final AlertDialog[] dlg = new AlertDialog[1];
 
-        box.addView(menuLabel(Lang.t("THEMA", "THEME"), theme.accent, d));
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        for (Theme t : Theme.ALL) {
+        // ---- links: thema's in een 2x2-raster ----
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        left.addView(menuLabel(Lang.t("THEMA", "THEME"), theme.accent, d));
+        LinearLayout gridRow = null;
+        for (int i = 0; i < Theme.ALL.length; i++) {
+            final Theme t = Theme.ALL[i];
+            if (i % 2 == 0) {
+                gridRow = new LinearLayout(this);
+                gridRow.setOrientation(LinearLayout.HORIZONTAL);
+                left.addView(gridRow);
+            }
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
-            card.setPadding((int) (14 * d), (int) (14 * d), (int) (14 * d), (int) (14 * d));
+            card.setPadding((int) (10 * d), (int) (10 * d), (int) (10 * d), (int) (10 * d));
             android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable(
                     android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xFF1A1A20, 0xFF0B0B0E});
             bg.setCornerRadius(8 * d);
             bg.setStroke((int) ((t == theme ? 3 : 1) * d), t == theme ? t.key : 0xFF2C2C35);
             card.setBackground(bg);
-            // kleurstaaltje: drie gloeiende balkjes
             LinearLayout sw = new LinearLayout(this);
             sw.setOrientation(LinearLayout.HORIZONTAL);
             for (int c : new int[]{t.speed, t.accent, t.trip, t.key}) {
@@ -360,70 +370,110 @@ public class MainActivity extends Activity {
                 android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
                 g.setCornerRadius(2 * d); g.setColor(c);
                 v.setBackground(g);
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, (int) (14 * d), 1f);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, (int) (10 * d), 1f);
                 lp.setMargins((int) (2 * d), 0, (int) (2 * d), 0);
                 sw.addView(v, lp);
             }
-            card.addView(sw, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (int) (14 * d)));
+            card.addView(sw);
             TextView name = menuLabel(t.name.toUpperCase(), t.key, d);
-            name.setTextSize(15);
+            name.setTextSize(14);
+            name.setPadding((int) (2 * d), (int) (8 * d), 0, (int) (2 * d));
             card.addView(name);
             TextView desc = new TextView(this);
             desc.setText(Lang.en ? themeDescEn(t.id) : t.desc);
             desc.setTextColor(0xFF8E8E9A);
-            desc.setTextSize(12);
+            desc.setTextSize(11);
+            desc.setMaxLines(2);
             card.addView(desc);
             card.setOnClickListener(v -> {
-                getSharedPreferences("optimus", MODE_PRIVATE).edit().putString("theme", t.id).apply();
+                op.edit().putString("theme", t.id).apply();
                 applyTheme(t);
-                if (dlg[0] != null) dlg[0].dismiss();
+                close.run();
                 toast(Lang.t("Thema: ", "Theme: ") + t.name);
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-            lp.setMargins((int) (6 * d), (int) (6 * d), (int) (6 * d), (int) (6 * d));
-            row.addView(card, lp);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, (int) (96 * d), 1f);
+            lp.setMargins((int) (5 * d), (int) (5 * d), (int) (5 * d), (int) (5 * d));
+            gridRow.addView(card, lp);
         }
-        box.addView(row);
 
-        box.addView(menuLabel("TAAL / LANGUAGE", theme.accent, d));
-        LinearLayout rowL = new LinearLayout(this);
-        rowL.setOrientation(LinearLayout.HORIZONTAL);
-        rowL.addView(menuButton(R.drawable.ic_settings, (Lang.en ? "" : "● ") + "NEDERLANDS", d, v -> {
-            Lang.set(this, false); if (dlg[0] != null) dlg[0].dismiss(); languageChanged(); }),
-                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
-        rowL.addView(menuButton(R.drawable.ic_settings, (Lang.en ? "● " : "") + "ENGLISH", d, v -> {
-            Lang.set(this, true); if (dlg[0] != null) dlg[0].dismiss(); languageChanged(); }),
-                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
-        box.addView(rowL);
+        // ---- rechts: instellingen als keuzeknoppen ----
+        LinearLayout right = new LinearLayout(this);
+        right.setOrientation(LinearLayout.VERTICAL);
+        right.setPadding((int) (16 * d), 0, 0, 0);
 
-        box.addView(menuLabel(Lang.t("NA OPSTARTEN / CONTACT AAN", "AFTER START-UP / IGNITION ON"), theme.accent, d));
-        final android.content.SharedPreferences op = getSharedPreferences("optimus", MODE_PRIVATE);
-        LinearLayout row3 = new LinearLayout(this);
-        row3.setOrientation(LinearLayout.HORIZONTAL);
+        right.addView(menuLabel(Lang.t("TAAL", "LANGUAGE"), theme.accent, d));
+        right.addView(choiceRow(d,
+                choice("NEDERLANDS", !Lang.en, d, v -> { close.run(); if (Lang.en) { Lang.set(this, false); languageChanged(); } }),
+                choice("ENGLISH", Lang.en, d, v -> { close.run(); if (!Lang.en) { Lang.set(this, true); languageChanged(); } })));
+
         boolean startAA = op.getBoolean("startAA", false);
-        row3.addView(menuButton(R.drawable.ic_apps, (startAA ? "" : "● ") + "LAUNCHER", d, v -> {
-            op.edit().putBoolean("startAA", false).apply(); if (dlg[0] != null) dlg[0].dismiss(); toast(Lang.t("Na opstarten: launcher", "After start-up: launcher")); }),
-                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
-        row3.addView(menuButton(R.drawable.ic_aa, (startAA ? "● " : "") + "ANDROID AUTO", d, v -> {
-            op.edit().putBoolean("startAA", true).apply(); if (dlg[0] != null) dlg[0].dismiss(); toast(Lang.t("Na opstarten: Android Auto", "After start-up: Android Auto")); }),
-                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
-        box.addView(row3);
+        right.addView(menuLabel(Lang.t("BIJ CONTACT AAN", "ON IGNITION"), theme.accent, d));
+        right.addView(choiceRow(d,
+                choice("LAUNCHER", !startAA, d, v -> { op.edit().putBoolean("startAA", false).apply(); close.run();
+                    toast(Lang.t("Bij contact aan: launcher", "On ignition: launcher")); }),
+                choice("ANDROID AUTO", startAA, d, v -> { op.edit().putBoolean("startAA", true).apply(); close.run();
+                    toast(Lang.t("Bij contact aan: Android Auto", "On ignition: Android Auto")); })));
 
-        box.addView(menuLabel(Lang.t("SYSTEEM", "SYSTEM"), theme.accent, d));
-        LinearLayout row2 = new LinearLayout(this);
-        row2.setOrientation(LinearLayout.HORIZONTAL);
-        row2.addView(menuButton(R.drawable.ic_update, Lang.t("UPDATE ZOEKEN", "CHECK UPDATE"), d, v -> { if (dlg[0] != null) dlg[0].dismiss(); Updater.check(this, true); }),
-                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
-        row2.addView(menuButton(R.drawable.ic_settings, "DEBUG", d, v -> { if (dlg[0] != null) dlg[0].dismiss(); startActivity(new Intent(this, DebugActivity.class)); }),
-                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
-        row2.addView(menuButton(R.drawable.ic_apps, Lang.t("SLUITEN", "CLOSE"), d, v -> { if (dlg[0] != null) dlg[0].dismiss(); }),
-                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
-        box.addView(row2);
+        right.addView(menuLabel(Lang.t("SYSTEEM", "SYSTEM"), theme.accent, d));
+        right.addView(choiceRow(d,
+                choice(Lang.t("UPDATE ZOEKEN", "CHECK UPDATE"), false, d, v -> { close.run(); Updater.check(this, true); }),
+                choice("DEBUG", false, d, v -> { close.run(); startActivity(new Intent(this, DebugActivity.class)); })));
 
+        View spacer = new View(this);
+        right.addView(spacer, new LinearLayout.LayoutParams(1, 0, 1f));
+        TextView ver = new TextView(this);
+        String vn = "";
+        try { vn = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
+        ver.setText("OPTIMUS LAUNCHER " + vn);
+        ver.setTextColor(0xFF5A5A66);
+        ver.setTextSize(11);
+        ver.setLetterSpacing(0.15f);
+        ver.setPadding((int) (6 * d), (int) (8 * d), 0, (int) (4 * d));
+        right.addView(ver);
+        right.addView(choiceRow(d, choice(Lang.t("SLUITEN", "CLOSE"), true, d, v -> close.run())));
+
+        box.addView(left, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.2f));
+        box.addView(right, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+
+        // vangnet: past het scherm toch niet, dan kun je scrollen
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.addView(box);
         dlg[0] = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar)
-                .setView(box).create();
+                .setView(scroll).create();
         dlg[0].show();
-        if (dlg[0].getWindow() != null) dlg[0].getWindow().setLayout((int) (900 * d), LinearLayout.LayoutParams.WRAP_CONTENT);
+        if (dlg[0].getWindow() != null) dlg[0].getWindow().setLayout((int) (940 * d), LinearLayout.LayoutParams.WRAP_CONTENT);
+    }
+
+    /** Rij van gelijke keuzeknoppen. */
+    private LinearLayout choiceRow(float d, View... items) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        for (View v : items) {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, (int) (48 * d), 1f);
+            lp.setMargins((int) (5 * d), (int) (4 * d), (int) (5 * d), (int) (4 * d));
+            row.addView(v, lp);
+        }
+        return row;
+    }
+
+    /** Keuzeknop: gekozen = gloeiende rand in de toetskleur, anders gedimd. */
+    private View choice(String label, boolean on, float d, View.OnClickListener l) {
+        TextView b = new TextView(this);
+        b.setText(label);
+        b.setGravity(android.view.Gravity.CENTER);
+        b.setTypeface(android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD));
+        b.setLetterSpacing(0.15f);
+        b.setTextSize(13);
+        b.setTextColor(on ? theme.key : 0xFF8E8E9A);
+        if (on) b.setShadowLayer(8f, 0, 0, (theme.key & 0x00FFFFFF) | 0x99000000);
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setCornerRadius(6 * d);
+        g.setColor(on ? ((theme.key & 0x00FFFFFF) | 0x26000000) : 0xFF141418);
+        g.setStroke((int) ((on ? 2 : 1) * d), on ? theme.key : 0xFF2C2C35);
+        b.setBackground(g);
+        b.setClickable(true);
+        b.setOnClickListener(l);
+        return b;
     }
 
     private TextView menuLabel(String t, int col, float d) {
