@@ -85,6 +85,7 @@ public class MainActivity extends Activity {
         cockpit = findViewById(R.id.cockpit);
         applyTheme(Theme.byId(getSharedPreferences("optimus", MODE_PRIVATE).getString("theme", "led")));
         handler.postDelayed(() -> { if (scanner != null) scanner.sweepOnce(); }, 600);
+        handleMenuExtra(getIntent());
         cockpit.listener = new CockpitView.Listener() {
             @Override public void onSpeedTap() { toggleOverlay(); }
             @Override public void onClockLongPress() { startActivity(new Intent(MainActivity.this, DebugActivity.class)); }
@@ -859,8 +860,21 @@ public class MainActivity extends Activity {
     /** Staat de launcher op het scherm? (dan geen zwevend venster nodig) */
     public static volatile boolean visible = false;
 
+    /** Extra "menuTab" (0-4): menu op dat tabblad openen (handig voor testen via adb). */
+    private void handleMenuExtra(Intent i) {
+        if (i == null || !i.hasExtra("menuTab")) return;
+        final int t = i.getIntExtra("menuTab", 0);
+        i.removeExtra("menuTab");
+        handler.postDelayed(() -> {
+            if (menuDlg != null && menuDlg.isShowing()) menuDlg.dismiss();
+            showMenu();
+            menuView.setTab(Math.max(0, Math.min(4, t)));
+        }, 400);
+    }
+
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        handleMenuExtra(intent);
         // terug na het opstartfilmpje of de HOME-knop: één sweep
         if (scanner != null) scanner.sweepOnce();
     }
