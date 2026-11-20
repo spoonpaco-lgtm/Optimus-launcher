@@ -77,6 +77,7 @@ public class CarLogger {
     private static final String[] KEEP = {
             "mcu", "gpio", "acc-syn", "ill-chk", "parking", "back-de", "carservice",
             "flycar", "androidruntime", "fatal exception", "bootanimation", "carletter",
+            "backlight", "hardwareservice", "acc off",
     };
 
     static boolean isCarLine(String line) {

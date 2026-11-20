@@ -261,7 +261,7 @@ public class TrackerService extends Service implements LocationListener {
             PowerLog.log("echte opstart (bootanimatie)");
         } else if (sameBoot && prevSlept >= 0 && slept - prevSlept > 30_000L) {
             playWakeAnim("dienst herstart na " + PowerLog.dur(slept - prevSlept) + " slaap");
-        } else if (sameBoot && offAt > 0 && el - offAt > 60_000L) {
+        } else if (sameBoot && offAt > 0 && el - offAt > 5_000L) {
             playWakeAnim("dienst herstart, contact was " + PowerLog.dur(el - offAt) + " uit");
         }
         saveClocks();
@@ -288,13 +288,28 @@ public class TrackerService extends Service implements LocationListener {
     }
 
     private void onCarSignal(String name, int v) {
+        // Scherm gaat echt aan (MCU zet de verlichting aan) na minstens 5 s uit -> opstartfilmpje.
+        // Dit is het betrouwbaarste moment: de MCU houdt het scherm soms donker tot de motor draait.
+        if (name.equals("scherm")) {
+            long now = android.os.SystemClock.elapsedRealtime();
+            long offAt = powerPrefs().getLong("screenOffEl", 0);
+            if (v == 0) powerPrefs().edit().putLong("screenOffEl", now).apply();
+            else {
+                if (offAt > 0 && now - offAt > 5_000L) {
+                    playWakeAnim("scherm aan na " + PowerLog.dur(now - offAt) + " donker");
+                    lastWakeElapsed = now;
+                    restartGps("scherm aan");
+                }
+                powerPrefs().edit().putLong("screenOffEl", 0).apply();
+            }
+        }
         // Contact aan na minstens 1 min uit -> opstartfilmpje (tablet slaapt niet altijd echt, dus niet alleen op scherm/slaap vertrouwen)
         if (name.equals("contact")) {
             long now = android.os.SystemClock.elapsedRealtime();
             long offAt = powerPrefs().getLong("contactOffEl", 0);
             if (v == 0) powerPrefs().edit().putLong("contactOffEl", now).apply();
             else if (v == 1) {
-                if (offAt > 0 && now - offAt > 60_000L) {
+                if (offAt > 0 && now - offAt > 5_000L) {
                     playWakeAnim("contact aan na " + PowerLog.dur(now - offAt));
                     lastWakeElapsed = now;
                     restartGps("contact aan");

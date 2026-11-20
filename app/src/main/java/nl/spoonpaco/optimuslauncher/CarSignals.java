@@ -16,7 +16,9 @@ public final class CarSignals {
     public static volatile int handbrake = -1;  // GPIO 60
     public static volatile int contact = -1;    // MCU key 01
     public static volatile int lights = -1;     // GPIO 60 (omgekeerd)
-    public static volatile int mcu04 = -1;      // MCU key 04, betekenis onbekend
+    public static volatile int mcu04 = -1;
+    public static volatile int screen = -1;     // MCU: achtergrondverlichting aan/uit
+    public static volatile int acc = -1;        // GPIO 62 via HardwareService      // MCU key 04, betekenis onbekend
     public static volatile float volts = -1f;   // MCU 05/02
     public static volatile long voltsTime = 0L;
     public static volatile Listener listener;
@@ -30,6 +32,12 @@ public final class CarSignals {
     /** true = regel is "interessant" (status veranderd) en mag in de log. */
     static boolean parse(String line) {
         try {
+            // Scherm echt aan/uit (MCU bevestigt achtergrondverlichting) -> moment voor het opstartfilmpje
+            int bl = line.indexOf("onScreenBackLightEnable ~: ");
+            if (bl >= 0) return set("scherm", line.startsWith("true", bl + 27) ? 1 : 0);
+            // ACC (contactslot) rechtstreeks van FlyAudio HardwareService (GPIO 62)
+            int ai = line.indexOf("onGpioInterrupt num:62 ~voltage:");
+            if (ai >= 0) return set("acc", line.charAt(ai + 32) == '1' ? 1 : 0);
             int i = line.indexOf("readLoop state gpioNum:");
             if (i >= 0) {
                 String rest = line.substring(i + 23);
@@ -69,6 +77,8 @@ public final class CarSignals {
             case "handrem": old = handbrake; handbrake = v; break;
             case "contact": old = contact; contact = v; break;
             case "mcu04": old = mcu04; mcu04 = v; break;
+            case "scherm": old = screen; screen = v; break;
+            case "acc": old = acc; acc = v; break;
             default: old = lights; lights = v; break;
         }
         if (old == v) return false;
