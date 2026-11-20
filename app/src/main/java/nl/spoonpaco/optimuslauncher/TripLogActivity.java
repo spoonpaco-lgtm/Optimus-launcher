@@ -57,15 +57,18 @@ public class TripLogActivity extends Activity {
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = label(Lang.t("RITTENLOG", "TRIP LOG"), theme.key, 20);
-        top.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.addView(label(Lang.t("RITTENLOG", "TRIP LOG"), theme.key, 20));
+        workTotal = label("", theme.trip, 12);
+        titles.addView(workTotal);
+        top.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         toggleRow = new LinearLayout(this);
         top.addView(toggleRow);
         top.addView(choice("HIGH SCORES", false, v -> showHighscores()), btnLp(140));
         top.addView(choice(Lang.t("NAAR USB", "TO USB"), false, v -> export()), btnLp(130));
         top.addView(choice(Lang.t("SLUITEN", "CLOSE"), true, v -> finish()), btnLp(120));
         root.addView(top);
-        buildToggle();
 
         // ---- lijst + route ----
         LinearLayout body = new LinearLayout(this);
@@ -84,7 +87,8 @@ public class TripLogActivity extends Activity {
                 TextView t = cv instanceof TextView ? (TextView) cv : new TextView(TripLogActivity.this);
                 TripLog.Trip tr = trips.get(i);
                 SimpleDateFormat df = new SimpleDateFormat("EEE d MMM  HH:mm", Lang.locale());
-                t.setText(df.format(new Date(tr.start)).replace(".", "").toUpperCase(Lang.locale())
+                t.setText((WorkLog.isWork(TripLogActivity.this, tr.id) ? "● " + Lang.t("WERK", "WORK") + "  " : "")
+                        + df.format(new Date(tr.start)).replace(".", "").toUpperCase(Lang.locale())
                         + String.format(Locale.US, "\n%.1f km · %d min", tr.km, tr.minutes)
                         + (tr.cost >= 0 ? String.format(Locale.US, " · € %.2f", tr.cost) : "")
                         + (tr.score >= 0 ? " · score " + tr.score : ""));
@@ -103,7 +107,7 @@ public class TripLogActivity extends Activity {
             }
         };
         list.setAdapter(adapter);
-        list.setOnItemClickListener((p, v, i, id) -> { sel = i; adapter.notifyDataSetChanged(); showTrip(); });
+        list.setOnItemClickListener((p, v, i, id) -> { sel = i; adapter.notifyDataSetChanged(); showTrip(); buildToggle(); });
         body.addView(list, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.38f));
 
         LinearLayout right = new LinearLayout(this);
@@ -124,7 +128,9 @@ public class TripLogActivity extends Activity {
         maint = label("", theme.accent, 14);
         maint.setLetterSpacing(0.04f);
         mrow.addView(maint, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        mrow.addView(choice(Lang.t("ONDERHOUD", "SERVICE"), false, v -> maintenanceDialog()), btnLp(140));
+        mrow.addView(choice(Lang.t("HIER OPSLAAN", "SAVE HERE"), false, v -> saveHere()), btnLp(130));
+        mrow.addView(choice(Lang.t("LOCATIES", "PLACES"), false, v -> showLocations()), btnLp(110));
+        mrow.addView(choice(Lang.t("ONDERHOUD", "SERVICE"), false, v -> maintenanceDialog()), btnLp(120));
         right.addView(mrow);
 
         body.addView(right, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.62f));
@@ -139,19 +145,37 @@ public class TripLogActivity extends Activity {
         adapter.notifyDataSetChanged();
         showTrip();
         showMaintenance();
+        buildToggle();
+        updateWorkTotal();
+        Geo.fillMissing(this);
     }
 
+    /** Knop "WERKRIT" voor de gekozen rit: achteraf markeren of de markering weghalen. */
     private void buildToggle() {
         toggleRow.removeAllViews();
-        boolean on = store.tripLogOn();
-        toggleRow.addView(choice(Lang.t("REGISTRATIE AAN", "LOGGING ON"), on, v -> { store.setTripLogOn(true); buildToggle(); }), btnLp(170));
-        toggleRow.addView(choice(Lang.t("UIT", "OFF"), !on, v -> { store.setTripLogOn(false); buildToggle(); }), btnLp(80));
+        if (trips.isEmpty()) return;
+        final TripLog.Trip t = trips.get(sel);
+        final boolean work = WorkLog.isWork(this, t.id);
+        toggleRow.addView(choice(work ? "● " + Lang.t("WERKRIT", "WORK TRIP") : Lang.t("MARKEER ALS WERKRIT", "MARK AS WORK TRIP"), work, v -> {
+            WorkLog.setWork(this, t.id, !work);
+            Toast.makeText(this, !work ? Lang.t("Rit staat nu in spoonpaco-ritten", "Trip added to spoonpaco-ritten")
+                    : Lang.t("Rit uit spoonpaco-ritten gehaald", "Trip removed from spoonpaco-ritten"), Toast.LENGTH_SHORT).show();
+            adapter.notifyDataSetChanged(); buildToggle(); updateWorkTotal();
+        }), btnLp(210));
+    }
+
+    private TextView workTotal;
+
+    private void updateWorkTotal() {
+        float km = WorkLog.kmThisYear(this);
+        int y = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR);
+        workTotal.setText(String.format(Locale.GERMANY, Lang.t("ZAKELIJK %d: %.0f KM = € %.2f", "BUSINESS %d: %.0f KM = € %.2f"),
+                y, km, km * WorkLog.ratePerKm(y)));
     }
 
     private void showTrip() {
         if (trips.isEmpty()) {
-            route.set(null, Lang.t(store.tripLogOn() ? "NOG GEEN RITTEN" : "REGISTRATIE STAAT UIT",
-                    store.tripLogOn() ? "NO TRIPS YET" : "LOGGING IS OFF"));
+            route.set(null, Lang.t("NOG GEEN RITTEN", "NO TRIPS YET"));
             details.setText(Lang.t("Een rit wordt opgeslagen zodra hij is afgesloten (contact uit of 5 min stilstand).",
                     "A trip is saved when it ends (ignition off or 5 min stopped)."));
             return;
@@ -169,6 +193,8 @@ public class TripLogActivity extends Activity {
         if (t.km > 0.5f && t.liters > 0.01f) s.append(String.format(Locale.US, "   ·   %.1f km/l", t.km / t.liters));
         if (t.cost >= 0) s.append(String.format(Locale.US, "   ·   € %.2f", t.cost));
         if (t.score >= 0) s.append("   ·   SCORE ").append(t.score);
+        s.append("\n").append(Lang.t("Van: ", "From: ")).append(WorkLog.address(this, t.sLat, t.sLon))
+         .append("\n").append(Lang.t("Naar: ", "To: ")).append(WorkLog.address(this, t.eLat, t.eLon));
         if (t.odoStart > 0 && t.odoEnd > 0)
             s.append(String.format(Locale.US, "\n%s %,d → %,d", Lang.t("km-stand", "odometer"), t.odoStart, t.odoEnd));
         details.setText(s.toString());
@@ -178,7 +204,7 @@ public class TripLogActivity extends Activity {
         long now = Clock.now();
         StringBuilder s = new StringBuilder();
         int odo = store.odometer();
-        s.append(Lang.t("KM-STAND  ", "ODOMETER  ")).append(odo < 0 ? Lang.t("niet ingesteld", "not set") : String.format(Locale.US, "~%,d", odo));
+        s.append(Lang.t("KM-STAND  ", "ODOMETER  ")).append(odo < 0 ? Lang.t("NIET INGESTELD — nodig voor werkritten", "NOT SET — needed for work trips") : String.format(Locale.US, "~%,d", odo));
         int k = store.oilKmLeft(), od = store.oilDaysLeft(now), a = store.apkDaysLeft(now);
         s.append(Lang.t("\nOLIE  ", "\nOIL  "));
         if (k == Integer.MIN_VALUE && od == Integer.MIN_VALUE) s.append(Lang.t("niet ingesteld", "not set"));
@@ -190,12 +216,60 @@ public class TripLogActivity extends Activity {
         s.append(Lang.t("\nAPK  ", "\nMOT  ")).append(a == Integer.MIN_VALUE ? Lang.t("niet ingesteld", "not set")
                 : days(a) + "  (" + new SimpleDateFormat("dd-MM-yyyy", Locale.US).format(new Date(store.apkDate())) + ")");
         maint.setText(s.toString());
-        maint.setTextColor(store.serviceDue(now) ? CockpitView.WR : theme.accent);
+        maint.setTextColor(store.serviceDue(now) || odo < 0 ? CockpitView.WR : theme.accent);
     }
 
     private static String days(int n) {
         return n >= 0 ? String.format(Locale.US, Lang.t("over %d dagen", "in %d days"), n)
                 : String.format(Locale.US, Lang.t("%d dagen te laat!", "%d days overdue!"), -n);
+    }
+
+    // ---------- vaste locaties ----------
+
+    private void saveHere() {
+        Locations.Loc l = Locations.addHere(this);
+        if (l == null) { Toast.makeText(this, Lang.t("Nog geen GPS-positie", "No GPS position yet"), Toast.LENGTH_SHORT).show(); return; }
+        Toast.makeText(this, Lang.t("Opgeslagen als ", "Saved as ") + l.label()
+                + Lang.t(" — adres volgt zodra er internet is", " — address follows when online"), Toast.LENGTH_LONG).show();
+        Geo.fillMissing(this);
+        WorkLog.write(this);
+        showTrip();
+    }
+
+    private void showLocations() {
+        final List<Locations.Loc> locs = Locations.all(this);
+        if (locs.isEmpty()) {
+            Toast.makeText(this, Lang.t("Nog geen locaties. Druk ter plekke op HIER OPSLAAN.", "No places yet. Press SAVE HERE on site."), Toast.LENGTH_LONG).show();
+            return;
+        }
+        String[] items = new String[locs.size()];
+        for (int i = 0; i < locs.size(); i++) {
+            Locations.Loc l = locs.get(i);
+            items[i] = l.name + (l.addr.isEmpty() ? Lang.t("  (adres volgt)", "  (address pending)") : "  —  " + l.addr);
+        }
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(Lang.t("Locaties (tik = naam wijzigen)", "Places (tap = rename)"))
+                .setItems(items, (dd, i) -> renameLocation(locs, i))
+                .setNegativeButton(Lang.t("Sluiten", "Close"), null)
+                .show();
+    }
+
+    private void renameLocation(final List<Locations.Loc> locs, final int i) {
+        final EditText e = new EditText(this);
+        e.setText(locs.get(i).name);
+        e.setSelectAllOnFocus(true);
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(Lang.t("Naam (bv. Thuis, school, klant)", "Name (e.g. Home, school, client)"))
+                .setView(e)
+                .setPositiveButton(Lang.t("Opslaan", "Save"), (dd, w) -> {
+                    locs.get(i).name = e.getText().toString().trim();
+                    Locations.save(this, locs); WorkLog.write(this); showTrip();
+                })
+                .setNeutralButton(Lang.t("Verwijderen", "Delete"), (dd, w) -> {
+                    locs.remove(i); Locations.save(this, locs); WorkLog.write(this); showTrip();
+                })
+                .setNegativeButton(Lang.t("Annuleren", "Cancel"), null)
+                .show();
     }
 
     private void showHighscores() {
@@ -214,7 +288,7 @@ public class TripLogActivity extends Activity {
     private void export() {
         try {
             String p = TripLog.export(this);
-            Toast.makeText(this, Lang.t("Rittenlog opgeslagen: ", "Trip log saved: ") + p, Toast.LENGTH_LONG).show();
+            Toast.makeText(this, Lang.t("Rittenlog + spoonpaco-ritten opgeslagen in: ", "Trip log + spoonpaco-ritten saved in: ") + p, Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             Toast.makeText(this, Lang.t("Exporteren mislukt: ", "Export failed: ") + e.getMessage(), Toast.LENGTH_LONG).show();
         }

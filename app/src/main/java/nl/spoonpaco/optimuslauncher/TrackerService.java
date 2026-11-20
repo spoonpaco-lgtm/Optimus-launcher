@@ -37,6 +37,7 @@ public class TrackerService extends Service implements LocationListener {
     public static volatile long satUpdateTime = 0L;
     public static volatile long firstFixMs = -1L;
     public static volatile float lastAccuracy = -1f;
+    public static volatile double lastLat = 0, lastLon = 0;
     public static volatile long serviceStart = 0L;
 
     private long lastSatNote = 0L;
@@ -105,6 +106,7 @@ public class TrackerService extends Service implements LocationListener {
     private LocationManager lm;
     private Location last;
     private long lastHarsh = 0L;
+    private long lastGeo = 0L;
     private Store store;
     private long lastGpsNote = 0L;
 
@@ -420,6 +422,8 @@ public class TrackerService extends Service implements LocationListener {
             }
             long idle = android.os.SystemClock.elapsedRealtime() - lastMoveElapsed;
             if (!store.tripEnded() && store.tripKm() >= MIN_TRIP_KM && idle >= STOP_MS) finishTrip("stilstand");
+            // adressen voor werkritten/locaties aanvullen zodra er internet is (elke 10 min proberen)
+            if (el - lastGeo > 600_000L) { lastGeo = el; Geo.fillMissing(TrackerService.this); }
             ui.postDelayed(this, 10_000L);
         }
     };
@@ -470,6 +474,7 @@ public class TrackerService extends Service implements LocationListener {
         speedKmh = kmh;
         if (loc.hasBearing() && moving) bearing = loc.getBearing();
         lastAccuracy = loc.hasAccuracy() ? loc.getAccuracy() : -1f;
+        if (loc.hasAccuracy() && loc.getAccuracy() <= 30f) { lastLat = loc.getLatitude(); lastLon = loc.getLongitude(); }
 
         if (now - lastGpsNote >= 5000) {
             lastGpsNote = now;

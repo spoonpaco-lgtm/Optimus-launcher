@@ -358,7 +358,7 @@ public class CockpitView extends View {
         float x = r.left + 20;
         // lampjes 3 x 2
         float bx = r.left + 18, bw = r.width() - 36;
-        String[] n = Lang.en ? new String[]{"IGNITION", "ENGINE", "LIGHTS", "TRIPS", "AUTO", "LOG"} : new String[]{"CONTACT", "MOTOR", "LICHT", "RITTEN", "AUTO", "LOG"};
+        String[] n = Lang.en ? new String[]{"IGNITION", "ENGINE", "LIGHTS", "WORK", "AUTO", "LOG"} : new String[]{"CONTACT", "MOTOR", "LICHT", "WERKRIT", "AUTO", "LOG"};
         int[] col = {0xFFF4E04D, WG, WA, 0xFFB66BFF, 0xFF2F8CFF, WG};
         boolean[] on = {lContact, lMotor, lLicht, lTrips, lAuto, lLog};
         for (int i = 0; i < 6; i++) {

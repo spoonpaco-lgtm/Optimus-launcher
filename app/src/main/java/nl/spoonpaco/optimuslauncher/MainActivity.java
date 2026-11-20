@@ -140,11 +140,12 @@ public class MainActivity extends Activity {
             }
         });
         findViewById(R.id.btn_menu).setOnClickListener(v -> showMenu());
-        // RIT: kort = registratie aan/uit, lang = rittenscherm
+        // RIT: kort = deze rit is een werkrit (gaat na de rit vanzelf uit), lang = rittenscherm
         findViewById(R.id.btn_trips).setOnClickListener(v -> {
-            boolean on = !store.tripLogOn();
-            store.setTripLogOn(on);
-            toast(on ? Lang.t("Rittenregistratie AAN", "Trip logging ON") : Lang.t("Rittenregistratie UIT", "Trip logging OFF"));
+            boolean on = !WorkLog.flag(this);
+            WorkLog.setFlag(this, on);
+            toast(on ? Lang.t("WERKRIT: deze rit gaat naar spoonpaco-ritten", "WORK TRIP: this trip goes to spoonpaco-ritten")
+                     : Lang.t("Werkrit uit", "Work trip off"));
             refresh();
         });
         findViewById(R.id.btn_trips).setOnLongClickListener(v -> {
@@ -545,7 +546,7 @@ public class MainActivity extends Activity {
         c.lContact = CarSignals.contact == 1 || (CarSignals.contact < 0 && c.volts > 0);
         c.lMotor = CarSignals.engineRunning();
         c.lLicht = CarSignals.lights == 1;
-        c.lTrips = store.tripLogOn();
+        c.lTrips = WorkLog.flag(this);
         c.accuWarn = BatteryHealth.level;
         c.lAuto = aaSeenRecently;
         if (scanner != null) scanner.update(CarSignals.mcu04 == 1, Math.max(BatteryHealth.level, store.serviceDue(Clock.now()) ? 1 : 0));

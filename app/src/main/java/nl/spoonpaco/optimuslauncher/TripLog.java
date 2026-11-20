@@ -40,7 +40,6 @@ public final class TripLog {
 
     /** Nieuwe rit begint (alleen als de registratie aan staat). */
     public static void begin(Context c, Store store, Location loc) {
-        if (!store.tripLogOn()) { sp(c).edit().putLong("id", 0).apply(); return; }
         long now = Clock.now();
         sp(c).edit().putLong("id", now)
                 .putString("sLat", String.valueOf(loc.getLatitude())).putString("sLon", String.valueOf(loc.getLongitude()))
@@ -106,6 +105,7 @@ public final class TripLog {
         if (!f.exists()) append(f, HEADER + "\n");
         append(f, line);
         CarLogger.note("rittenlog: rit opgeslagen (" + String.format(Locale.US, "%.1f km", sum[0]) + ")");
+        WorkLog.onTripEnded(c, id);
     }
 
     public static boolean active(Context c) { return sp(c).getLong("id", 0) != 0; }
@@ -183,15 +183,21 @@ public final class TripLog {
     public static String export(Context c) throws Exception {
         File src = new File(dir(c), "ritten.csv");
         if (!src.exists()) throw new Exception(Lang.t("nog geen ritten", "no trips yet"));
+        File work = WorkLog.write(c);
         File target = null;
         File[] ext = c.getExternalFilesDirs(null);
         if (ext != null && ext.length > 1 && ext[1] != null) target = ext[1];          // USB-stick / SD
         if (target == null) target = c.getExternalFilesDir(null);
         File out = new File(target, "ritten-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(new java.util.Date(Clock.now())) + ".csv");
+        copy(src, out);
+        copy(work, new File(target, WorkLog.FILE));
+        return target.getAbsolutePath();
+    }
+
+    private static void copy(File src, File out) throws Exception {
         try (java.io.FileInputStream in = new java.io.FileInputStream(src); java.io.FileOutputStream o = new java.io.FileOutputStream(out)) {
             byte[] b = new byte[8192]; int n;
             while ((n = in.read(b)) > 0) o.write(b, 0, n);
         }
-        return out.getAbsolutePath();
     }
 }
