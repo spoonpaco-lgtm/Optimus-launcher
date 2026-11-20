@@ -124,6 +124,7 @@ public class TrackerService extends Service implements LocationListener {
         startForeground(1, n);
 
         CarLogger.start(this);
+        BtMedia.start(this);
         PowerLog.init(this);
         PowerLog.log("dienst gestart — " + PowerLog.clocks()
                 + (android.os.SystemClock.elapsedRealtime() < 5L * 60L * 1000L ? "  => ECHTE OPSTART" : ""));

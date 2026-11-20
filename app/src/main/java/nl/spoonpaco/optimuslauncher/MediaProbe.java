@@ -116,12 +116,13 @@ public class MediaProbe extends NotificationListenerService {
     /** Blok voor het debugscherm. */
     public static String report(Context ctx) {
         StringBuilder s = new StringBuilder("== Android Auto / media (meting) ==\n");
+        s.append(BtMedia.report());
         boolean allowed = false;
         try {
             String en = Settings.Secure.getString(ctx.getContentResolver(), "enabled_notification_listeners");
             allowed = en != null && en.contains(ctx.getPackageName());
         } catch (Exception ignored) { }
-        s.append("meldingtoegang: ").append(allowed ? (connected ? "ja, actief" : "ja, nog niet verbonden") : "NEE (knop Meldingtoegang)").append('\n');
+        s.append("meldingtoegang: ").append(allowed ? (connected ? "ja, actief" : "ja, nog niet verbonden") : "NEE (op dit toestel geblokkeerd; via adb)").append('\n');
         if (allowed) {
             try {
                 MediaSessionManager m = (MediaSessionManager) ctx.getSystemService(Context.MEDIA_SESSION_SERVICE);
