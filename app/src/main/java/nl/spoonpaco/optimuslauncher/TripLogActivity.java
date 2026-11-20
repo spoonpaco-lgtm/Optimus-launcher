@@ -43,7 +43,7 @@ public class TripLogActivity extends Activity {
         store = new Store(this);
         theme = Theme.byId(getSharedPreferences("optimus", MODE_PRIVATE).getString("theme", "led"));
         pt = RetroUi.painter(this, theme);
-        d = getResources().getDisplayMetrics().density;
+        d = RetroUi.unit(this);
         int pad = (int) (14 * d);
 
         FrameLayout frame = new FrameLayout(this);
@@ -59,10 +59,10 @@ public class TripLogActivity extends Activity {
         top.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout titles = new LinearLayout(this);
         titles.setOrientation(LinearLayout.VERTICAL);
-        RetroUi.Text title = new RetroUi.Text(this, pt, 22, theme.key);
+        RetroUi.Text title = new RetroUi.Text(this, pt, 24, theme.key);
         title.set(Lang.t("RITTENLOG", "TRIP LOG"));
         titles.addView(title);
-        workTotal = new RetroUi.Text(this, pt, 11, theme.trip);
+        workTotal = new RetroUi.Text(this, pt, 12, theme.trip);
         titles.addView(workTotal);
         top.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         workBtn = btn(Lang.t("MARKEER ALS WERKRIT", "MARK AS WORK TRIP"), false, v -> toggleWork());
@@ -102,7 +102,7 @@ public class TripLogActivity extends Activity {
         right.setPadding((int) (12 * d), 0, 0, 0);
         route = new RouteView(this);
         right.addView(route, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        details = new RetroUi.Text(this, pt, 12, CockpitView.TXT);
+        details = new RetroUi.Text(this, pt, 13, CockpitView.TXT);
         LinearLayout detBox = new LinearLayout(this);
         detBox.setBackground(new RetroUi.Panel(pt, RetroUi.Panel.WINDOW, theme.key, d));
         detBox.setPadding((int) (16 * d), (int) (8 * d), (int) (16 * d), (int) (8 * d));
@@ -129,7 +129,7 @@ public class TripLogActivity extends Activity {
 
     private RetroUi.Btn btn(String text, boolean on, View.OnClickListener l) {
         RetroUi.Btn b = new RetroUi.Btn(this, pt, text, on, theme.key);
-        b.size = 14;
+        b.size = 15;
         b.setOnClickListener(l);
         return b;
     }
@@ -156,7 +156,7 @@ public class TripLogActivity extends Activity {
         int y = Calendar.getInstance().get(Calendar.YEAR);
         workTotal.set(String.format(Locale.GERMANY, Lang.t("ZAKELIJK %d: %.0f KM = € %.2f", "BUSINESS %d: %.0f KM = € %.2f"),
                 y, km, km * WorkLog.ratePerKm(y)));
-        workBtn.setVisibility(trips.isEmpty() ? View.INVISIBLE : View.VISIBLE);
+        workBtn.setVisibility(trips.isEmpty() ? View.GONE : View.VISIBLE);
         if (trips.isEmpty()) {
             route.set(null, Lang.t("NOG GEEN RITTEN", "NO TRIPS YET"));
             details.set(Lang.t("EEN RIT WORDT OPGESLAGEN ZODRA HIJ IS AFGESLOTEN\n(CONTACT UIT OF 10 MIN STILSTAND)",

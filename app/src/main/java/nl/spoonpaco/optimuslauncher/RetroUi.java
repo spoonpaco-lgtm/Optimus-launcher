@@ -17,6 +17,12 @@ import android.view.View;
 public final class RetroUi {
     private RetroUi() { }
 
+    /** Zelfde maat als de cockpit en het menu: 1240 eenheden over de schermbreedte. */
+    public static float unit(Context c) {
+        android.util.DisplayMetrics m = c.getResources().getDisplayMetrics();
+        return Math.max(m.widthPixels, m.heightPixels) / 1240f;
+    }
+
     public static CockpitView painter(Context c, Theme t) {
         CockpitView p = new CockpitView(c, null);
         p.setTheme(t);
@@ -51,7 +57,7 @@ public final class RetroUi {
         public String label; public boolean on; public int key; public float size = 15;
         public Btn(Context c, CockpitView pt, String label, boolean on, int key) {
             super(c); this.pt = pt; this.label = label; this.on = on; this.key = key;
-            d = c.getResources().getDisplayMetrics().density;
+            d = unit(c);
             setClickable(true);
             setContentDescription(label);
         }
@@ -69,7 +75,7 @@ public final class RetroUi {
         public String[] lines = new String[0]; public int[] cols; public float size; public int col;
         public Text(Context c, CockpitView pt, float size, int col) {
             super(c); this.pt = pt; this.size = size; this.col = col;
-            d = c.getResources().getDisplayMetrics().density;
+            d = unit(c);
         }
         public void set(String text) { lines = text.split("\n"); cols = null; setContentDescription(text); requestLayout(); invalidate(); }
         public void set(String[] l, int[] c) { lines = l; cols = c; setContentDescription(String.join(" / ", l)); requestLayout(); invalidate(); }
@@ -92,7 +98,7 @@ public final class RetroUi {
     public static class Scanlines extends View {
         private final CockpitView pt; private final float d;
         public Scanlines(Context c, CockpitView pt) {
-            super(c); this.pt = pt; d = c.getResources().getDisplayMetrics().density;
+            super(c); this.pt = pt; d = unit(c);
             setClickable(false); setFocusable(false);
         }
         @Override protected void onDraw(Canvas c) {
