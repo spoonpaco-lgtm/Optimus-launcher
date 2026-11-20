@@ -6,9 +6,17 @@ public final class Theme {
     public final int speed, accent, trip, accu, tank, north;
     public final int speedTint, speedEdge, accentTint, accentEdge;
     public final int rib, bgTop, key;
+    /** Old-skool: alles van lampjes. */
+    public final boolean leds;
 
     private Theme(String id, String name, String desc, int speed, int accent, int trip, int accu, int tank, int north,
                   int speedTint, int speedEdge, int accentTint, int accentEdge, int rib, int bgTop, int key) {
+        this(id, name, desc, speed, accent, trip, accu, tank, north, speedTint, speedEdge, accentTint, accentEdge, rib, bgTop, key, false);
+    }
+
+    private Theme(String id, String name, String desc, int speed, int accent, int trip, int accu, int tank, int north,
+                  int speedTint, int speedEdge, int accentTint, int accentEdge, int rib, int bgTop, int key, boolean leds) {
+        this.leds = leds;
         this.id = id; this.name = name; this.desc = desc;
         this.speed = speed; this.accent = accent; this.trip = trip; this.accu = accu; this.tank = tank; this.north = north;
         this.speedTint = speedTint; this.speedEdge = speedEdge; this.accentTint = accentTint; this.accentEdge = accentEdge;
@@ -30,7 +38,12 @@ public final class Theme {
             0xFFFF2BD6, 0xFF22E4FF, 0xFF22E4FF, 0xFFB66BFF, 0xFFFFE45C, 0xFFFF2BD6,
             0xFF2A0628, 0xFF4A0D48, 0xFF06242A, 0xFF0B4650, 0x66140820, 0xFF1A0C24, 0xFF22E4FF);
 
-    public static final Theme[] ALL = {LED, VFD, NEON};
+    /** Old-skool: alles opgebouwd uit lampjes (dot-matrix), kleuren van LED Cockpit. */
+    public static final Theme OLD = new Theme("old", "Old-skool", "Alles van lampjes: dot-matrix cijfers en tekst",
+            0xFFFF2D23, 0xFFFFB21A, 0xFF3BE07A, 0xFF2F8CFF, 0xFFFFD23A, 0xFFFF2D23,
+            0xFF140303, 0xFF3A0B0B, 0xFF140C00, 0xFF3A2600, 0x660E0E12, 0xFF17171D, 0xFFFF8A1F, true);
+
+    public static final Theme[] ALL = {LED, VFD, NEON, OLD};
 
     public static Theme byId(String id) {
         for (Theme t : ALL) if (t.id.equals(id)) return t;

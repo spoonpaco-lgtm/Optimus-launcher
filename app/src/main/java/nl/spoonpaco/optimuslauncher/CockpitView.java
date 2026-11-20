@@ -47,11 +47,13 @@ public class CockpitView extends View {
     int RED = WR, AMB = WA, GRN = WG, BLU = 0xFF2F8CFF, YEL = 0xFFFFD23A;
     int tRed = 0xFF2B0505, eRed = 0xFF4A0D0D, tAmb = 0xFF241600, eAmb = 0xFF4A3000;
     int rib = 0x660E0E12, bgTop = 0xFF17171D, north = WR;
+    /** Old-skool: alles van lampjes (dot-matrix cijfers/tekst, lampjesrijen). */
+    boolean leds = false;
 
     public void setTheme(Theme t) {
         RED = t.speed; AMB = t.accent; GRN = t.trip; BLU = t.accu; YEL = t.tank;
         tRed = t.speedTint; eRed = t.speedEdge; tAmb = t.accentTint; eAmb = t.accentEdge;
-        rib = t.rib; bgTop = t.bgTop; north = t.north;
+        rib = t.rib; bgTop = t.bgTop; north = t.north; leds = t.leds;
         bg = null;
         invalidate();
     }
@@ -125,8 +127,12 @@ public class CockpitView extends View {
         p.setShader(new LinearGradient(0, 0, 1240, 0, new int[]{RED & 0x00FFFFFF, RED, AMB, RED, RED & 0x00FFFFFF}, null, Shader.TileMode.CLAMP));
         glow.setShader(p.getShader());
         glow.setMaskFilter(new BlurMaskFilter(8, BlurMaskFilter.Blur.NORMAL));
-        c.drawRect(0, 70, 1240, 73, glow);
-        c.drawRect(0, 70, 1240, 73, p);
+        if (leds) {
+            for (float px = 4; px < 1240; px += 9) { c.drawCircle(px, 71.5f, 2.2f, glow); c.drawCircle(px, 71.5f, 1.8f, p); }
+        } else {
+            c.drawRect(0, 70, 1240, 73, glow);
+            c.drawRect(0, 70, 1240, 73, p);
+        }
         p.setShader(null); glow.setShader(null); glow.setMaskFilter(null);
         for (RectF r : new RectF[]{pan1, pan2, pan3}) bezel(c, r);
         // vaste vensters/vakken
@@ -227,6 +233,7 @@ public class CockpitView extends View {
         drawSegCentered(c, clockFmt.format(new Date(now)), clockR, 34, AMB);
         glass(c, clockR);
         text(c, dateFmt.format(new Date(now)).replace(".", "").toUpperCase(new Locale("nl")), 184, 26, 12, TXT);
+        if (leds) { text(c, "OPTIMUS", 184, 50, 13, 0xFFECEFF4); } else {
         p.setShader(new LinearGradient(0, 36, 0, 50, 0xFFFFFFFF, 0xFF55555E, Shader.TileMode.CLAMP));
         p.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         p.setTextSize(14);
@@ -234,6 +241,7 @@ public class CockpitView extends View {
         c.drawText("OPTIMUS", 184, 50, p);
         p.setShader(null);
         p.setLetterSpacing(0f);
+        }
 
         // kompas
         RectF r = new RectF(312, 4, 1062, 58);
@@ -243,6 +251,18 @@ public class CockpitView extends View {
         float pxPerDeg = r.width() / 150f;
         String[] names = {"N", "NO", "O", "ZO", "Z", "ZW", "W", "NW"};
         int start = (int) Math.floor((hd - 80) / 5) * 5;
+        if (leds) {
+            for (int d = start; d <= hd + 80; d += 5) {
+                float x = r.centerX() + (d - hd) * pxPerDeg;
+                int a = ((d % 360) + 360) % 360;
+                if (a % 45 == 0) {
+                    p.setTextAlign(Paint.Align.CENTER);
+                    text(c, names[a / 45], x, r.top + 20, a % 90 == 0 ? 14 : 11, a == 0 ? north : 0xFFECEFF4);
+                    p.setTextAlign(Paint.Align.LEFT);
+                }
+                if (a % 15 == 0) lampAt(c, x, r.bottom - 12, a % 45 == 0 ? 6 : 4.5f, a == 0 ? north : 0xFFB8B8C4, a % 45 == 0 && heading >= 0);
+            }
+        } else
         for (int d = start; d <= hd + 80; d += 5) {
             float x = r.centerX() + (d - hd) * pxPerDeg;
             int a = ((d % 360) + 360) % 360;
@@ -276,11 +296,13 @@ public class CockpitView extends View {
         c.drawRoundRect(310, 2, 1064, 60, 4, 4, p);
         p.setStyle(Paint.Style.FILL);
         // naald
+        if (leds) { lampAt(c, r.centerX(), r.bottom - 12, 8, AMB, true); } else {
         glowRect(c, r.centerX() - 1, r.top, r.centerX() + 1, r.bottom, AMB);
         Path tri = new Path();
         tri.moveTo(r.centerX() - 8, r.top); tri.lineTo(r.centerX() + 8, r.top); tri.lineTo(r.centerX(), r.top + 9); tri.close();
         p.setColor(AMB);
         c.drawPath(tri, p);
+        }
 
         // koers-display
         RectF hr = new RectF(1080, 2, 1240, 60);
@@ -310,7 +332,7 @@ public class CockpitView extends View {
         text(c, "KM/U", w.right + 12, w.bottom - 10, 16, RED);
         float by = w.bottom + 14;
         int lit = speed < 0 ? 0 : Math.min(22, Math.round(speed / 160f * 22f));
-        bar(c, x, by, r.right - 20, 16, 22, lit, 0, tRed, eRed);
+        bar(c, x, by, r.right - 20, 16, leds ? 16 : 22, leds ? Math.round(lit * 16f / 22f) : lit, 0, tRed, eRed);
         float sy = by + 44;
         float bw = r.right - 20 - x;
         for (int i = 0; i <= 4; i++) {
@@ -386,7 +408,7 @@ public class CockpitView extends View {
         float by = w.bottom + 14;
         // balk: 6..22 km/l, zuinig = groen (rechts)
         int lit = kml < 0 ? 0 : Math.max(0, Math.min(16, Math.round((kml - 6f) / 16f * 16f)));
-        bar(c, x, by, r.right - 20, 13, 16, lit, 2, tAmb, eAmb);
+        bar(c, x, by, r.right - 20, 13, leds ? 12 : 16, leds ? Math.round(lit * 12f / 16f) : lit, 2, tAmb, eAmb);
         float sy = by + 40, bw = r.right - 20 - x;
         for (int i = 0; i <= 4; i++) {
             p.setTextAlign(i == 0 ? Paint.Align.LEFT : i == 4 ? Paint.Align.RIGHT : Paint.Align.CENTER);
@@ -427,6 +449,17 @@ public class CockpitView extends View {
         y += 2;
         x1 += 2; x2 -= 2;
         float gap = 3, sw = (x2 - x1 - 10 - gap * (n - 1)) / n;
+        if (leds) {
+            float R = Math.min((h + 8) / 2f, (sw + gap) / 2f - 1f);
+            float cy = y + 5 + h / 2f;
+            for (int i = 0; i < n; i++) {
+                int col = barColor(scheme, i, n);
+                float cx = x1 + 5 + i * (sw + gap) + sw / 2f;
+                lampAt(c, cx, cy, R, col, i < lit);
+            }
+            glass(c, wr);
+            return;
+        }
         for (int i = 0; i < n; i++) {
             int col;
             if (scheme == 0) col = i < n * 14 / 22 ? WG : (i < n * 18 / 22 ? WA : WR);
@@ -438,6 +471,13 @@ public class CockpitView extends View {
             else { p.setColor((col & 0x00FFFFFF) | 0x16000000); c.drawRect(sx, y + 5, sx + sw, y + 5 + h, p); }
         }
         glass(c, wr);
+    }
+
+    private static int barColor(int scheme, int i, int n) {
+        if (scheme == 0) return i < n * 14 / 22 ? WG : (i < n * 18 / 22 ? WA : WR);
+        if (scheme == 1) return i < n / 2 ? WG : (i < n * 13 / 16 ? WA : WR);
+        if (scheme == 2) return i < n * 3 / 16 ? WR : (i < n * 7 / 16 ? WA : WG);
+        return i < Math.max(1, n / 5) ? WR : (i < Math.max(2, n * 2 / 5) ? WA : WG);
     }
 
     private void glowRect(Canvas c, float l, float t, float r, float b, int col) {
@@ -467,30 +507,42 @@ public class CockpitView extends View {
     }
 
     /** Dashboardlampje: verchroomde ring met bolle lens. */
-    private void lamp(Canvas c, float cx, float cy, int col, boolean on) {
+    private void lamp(Canvas c, float cx, float cy, int col, boolean on) { lampAt(c, cx, cy, 18, col, on); }
+
+    /** Dashboardlampje met straal R (chromen ring), lens ~0.72 R. */
+    private void lampAt(Canvas c, float cx, float cy, float R, int col, boolean on) {
+        float k = R / 18f, lr = 13 * k;
         glow.setColor(0xFF000000);
-        glow.setMaskFilter(new BlurMaskFilter(4, BlurMaskFilter.Blur.NORMAL));
-        c.drawCircle(cx, cy + 3, 18, glow);
+        glow.setMaskFilter(new BlurMaskFilter(Math.max(1, 4 * k), BlurMaskFilter.Blur.NORMAL));
+        c.drawCircle(cx, cy + 3 * k, R, glow);
         glow.setMaskFilter(null);
         p.setShader(new SweepGradient(cx, cy, new int[]{0xFFD9D9E0, 0xFF55555E, 0xFFC4C4CC, 0xFF3A3A42, 0xFFD9D9E0}, null));
-        c.drawCircle(cx, cy, 18, p);
+        c.drawCircle(cx, cy, R, p);
         p.setShader(null);
         if (on) {
             glow.setColor(col);
-            glow.setMaskFilter(new BlurMaskFilter(16, BlurMaskFilter.Blur.NORMAL));
-            c.drawCircle(cx, cy, 14, glow);
+            glow.setMaskFilter(new BlurMaskFilter(Math.max(2, 16 * k), BlurMaskFilter.Blur.NORMAL));
+            c.drawCircle(cx, cy, 14 * k, glow);
             glow.setMaskFilter(null);
-            p.setShader(new RadialGradient(cx - 4, cy - 5, 16, new int[]{0xEEFFFFFF, col, (col & 0x00FFFFFF) | 0xCC000000, (col & 0x00FFFFFF) | 0x55000000},
+            p.setShader(new RadialGradient(cx - 4 * k, cy - 5 * k, 16 * k, new int[]{0xEEFFFFFF, col, (col & 0x00FFFFFF) | 0xCC000000, (col & 0x00FFFFFF) | 0x55000000},
                     new float[]{0f, 0.28f, 0.55f, 1f}, Shader.TileMode.CLAMP));
         } else {
-            p.setShader(new RadialGradient(cx - 4, cy - 5, 16, new int[]{(col & 0x00FFFFFF) | 0x55000000, (col & 0x00FFFFFF) | 0x22000000, 0xFF120C0C},
+            p.setShader(new RadialGradient(cx - 4 * k, cy - 5 * k, 16 * k, new int[]{(col & 0x00FFFFFF) | 0x55000000, (col & 0x00FFFFFF) | 0x22000000, 0xFF120C0C},
                     new float[]{0f, 0.3f, 0.75f}, Shader.TileMode.CLAMP));
         }
-        c.drawCircle(cx, cy, 13, p);
+        c.drawCircle(cx, cy, lr, p);
         p.setShader(null);
     }
 
     private void text(Canvas c, String t, float x, float y, float size, int col) {
+        if (leds) {
+            float pitch = size * 0.19f;
+            float w = DotFont.width(t, pitch);
+            Paint.Align al = p.getTextAlign();
+            float x0 = al == Paint.Align.CENTER ? x - w / 2 : al == Paint.Align.RIGHT ? x - w : x;
+            DotFont.draw(c, t, x0, y - 7 * pitch, pitch, col, false, false, p, glow);
+            return;
+        }
         p.setTypeface(label);
         p.setTextSize(size);
         p.setLetterSpacing(0.18f);
@@ -507,6 +559,7 @@ public class CockpitView extends View {
     private static final String[] SEGS = {"abcdef", "bc", "abdeg", "abcdg", "bcfg", "acdfg", "acdefg", "abc", "abcdefg", "abcdfg", "g", ""};
 
     float segWidth(String t, float H) {
+        if (leds) return DotFont.width(t, H / 7f);
         float W = H * 0.56f, T = H * 0.13f, sp = H * 0.16f, x = 0;
         for (char ch : t.toCharArray()) {
             if (ch == '.') continue;
@@ -523,6 +576,10 @@ public class CockpitView extends View {
 
     /** 7-segmentcijfers met zwakke "uit"-segmenten, licht schuin, met gloed. */
     void drawSeg(Canvas c, String t, float x0, float y0, float H, int col) {
+        if (leds) {
+            DotFont.draw(c, t, x0, y0, H / 7f, col, H >= 24, true, p, glow);
+            return;
+        }
         float W = H * 0.56f, T = H * 0.13f, gp = T * 0.18f, sp = H * 0.16f;
         Path lit = new Path(), off = new Path();
         float x = 0;

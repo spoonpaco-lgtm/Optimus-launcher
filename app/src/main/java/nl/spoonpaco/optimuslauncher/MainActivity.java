@@ -265,15 +265,25 @@ public class MainActivity extends Activity {
 
     private static final int[] KEY_IDS = {R.id.btn_aa, R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel,
             R.id.btn_apps, R.id.btn_settings, R.id.btn_menu};
+    private static final String[] KEY_TEXT = {"AUTO", "FM", "EQ", "TANK", "APPS", "SET", "MENU"};
+    private static final int[] KEY_ICON = {R.drawable.ic_aa, R.drawable.ic_radio, R.drawable.ic_eq, R.drawable.ic_fuel,
+            R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_menu};
 
     private void applyTheme(Theme t) {
         theme = t;
         cockpit.setTheme(t);
         float d = getResources().getDisplayMetrics().density;
-        for (int id : KEY_IDS) {
-            android.widget.ImageButton b = findViewById(id);
-            b.setImageTintList(android.content.res.ColorStateList.valueOf(t.key));
+        for (int i = 0; i < KEY_IDS.length; i++) {
+            android.widget.ImageButton b = findViewById(KEY_IDS[i]);
             b.setBackground(keyBackground(t.key, d));
+            if (t.leds) {
+                b.setImageTintList(null);
+                String label = (KEY_IDS[i] == R.id.btn_aa && aaKeyIsNav) ? "NAV" : KEY_TEXT[i];
+                b.setImageDrawable(new LedTextDrawable(label, t.key, 3.2f * d));
+            } else {
+                b.setImageResource(KEY_ICON[i] == R.drawable.ic_aa && aaKeyIsNav ? R.drawable.ic_nav : KEY_ICON[i]);
+                b.setImageTintList(android.content.res.ColorStateList.valueOf(t.key));
+            }
         }
     }
 
@@ -523,7 +533,8 @@ public class MainActivity extends Activity {
         boolean nav = since >= 30_000L && !aaSeen && installed("app.organicmaps");
         if (nav != aaKeyIsNav) {
             aaKeyIsNav = nav;
-            b.setImageResource(nav ? R.drawable.ic_nav : R.drawable.ic_aa);
+            if (theme.leds) b.setImageDrawable(new LedTextDrawable(nav ? "NAV" : "AUTO", theme.key, 3.2f * getResources().getDisplayMetrics().density));
+            else b.setImageResource(nav ? R.drawable.ic_nav : R.drawable.ic_aa);
             b.setContentDescription(nav ? "Offline navigeren" : "Android Auto");
         }
     }
