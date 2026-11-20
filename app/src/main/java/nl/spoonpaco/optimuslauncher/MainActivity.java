@@ -89,8 +89,11 @@ public class MainActivity extends Activity {
             @Override public void onTankTap() { showFuelDialog(); }
         };
 
-        wireApp(R.id.btn_aa, PKG_AA, "Android Auto (CarLetter)");
-        wireApp(R.id.btn_offline, "app.organicmaps", "Organic Maps");
+        // AA-knop: normaal Android Auto; verbindt AA niet binnen 30 s, dan wordt hij "Offline navigeren"
+        findViewById(R.id.btn_aa).setOnClickListener(v -> {
+            if (aaKeyIsNav) launch("app.organicmaps", "Organic Maps");
+            else launch(PKG_AA, "Android Auto");
+        });
 
         // Contact aan (= tablet net opgestart): na 4 s vanzelf Android Auto openen, één keer per opstart
         if (!aaAutoStarted && android.os.SystemClock.elapsedRealtime() < 5L * 60L * 1000L && installed(PKG_AA)) {
@@ -136,7 +139,7 @@ public class MainActivity extends Activity {
         findViewById(R.id.btn_update).setOnClickListener(v -> Updater.check(this, true));
         // Lang indrukken op een icoon = naam tonen (behalve AA: dat is afspelen/pauze)
         for (int id : new int[]{R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_apps,
-                R.id.btn_settings, R.id.btn_update, R.id.btn_offline}) {
+                R.id.btn_settings, R.id.btn_update}) {
             findViewById(id).setOnLongClickListener(v -> { toast(String.valueOf(v.getContentDescription())); return true; });
         }
 
@@ -351,10 +354,11 @@ public class MainActivity extends Activity {
     private long lastArpCheck = 0L;
     private boolean aaSeen = false;
     private boolean aaSeenRecently = false;
+    private boolean aaKeyIsNav = false;
 
     /** Knop "Offline navigeren" alleen tonen als Android Auto 30 s na opstart/wakker niet verbonden is. */
     private void updateOfflineButton() {
-        android.view.View b = findViewById(R.id.btn_offline);
+        android.widget.ImageButton b = findViewById(R.id.btn_aa);
         long now = android.os.SystemClock.elapsedRealtime();
         long since = now - TrackerService.lastWakeElapsed;
         if (since < 30_000L || TrackerService.lastWakeElapsed == 0L) aaSeen = false;
@@ -363,9 +367,12 @@ public class MainActivity extends Activity {
             aaSeenRecently = aaClientPresent();
             if (aaSeenRecently) aaSeen = true;
         }
-        boolean show = since >= 30_000L && !aaSeen && installed("app.organicmaps");
-        int vis = show ? android.view.View.VISIBLE : android.view.View.GONE;
-        if (b.getVisibility() != vis) b.setVisibility(vis);
+        boolean nav = since >= 30_000L && !aaSeen && installed("app.organicmaps");
+        if (nav != aaKeyIsNav) {
+            aaKeyIsNav = nav;
+            b.setImageResource(nav ? R.drawable.ic_nav : R.drawable.ic_aa);
+            b.setContentDescription(nav ? "Offline navigeren" : "Android Auto");
+        }
     }
 
     /** Telefoon verbonden met de Android Auto-hotspot van de tablet (192.168.43.x in ARP-tabel)? */

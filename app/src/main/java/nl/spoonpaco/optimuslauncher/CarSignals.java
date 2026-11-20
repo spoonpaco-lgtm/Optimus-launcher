@@ -3,9 +3,10 @@ package nl.spoonpaco.optimuslauncher;
 /**
  * Signalen van de auto, gelezen uit de FlyAudio-logregels (READ_LOGS).
  * Vondsten 20-11-2026 uit de autolog:
- *  - GPIO 60: vermoedelijk HANDREM (1 = erop, 0 = eraf) — nog te bevestigen met test
+ *  - GPIO 60: VERLICHTING (bevestigd door Mick 20-11): 0 = lichten aan, 1 = uit (actief laag)
+ *  - handrem: nog niet gevonden
  *  - MCU ff5504 00 01 vv: contact (01 = aan, 00 = uit)
- *  - MCU ff5504 00 04 vv: vermoedelijk verlichting (01 = aan)
+ *  - MCU ff5504 00 04 vv: onbekend (wordt als "mcu04" gelogd)
  *  - MCU ff5505 00 02 hhhh: accuspanning in mV (14,3 V = motor draait)
  */
 public final class CarSignals {
@@ -14,7 +15,8 @@ public final class CarSignals {
 
     public static volatile int handbrake = -1;  // GPIO 60
     public static volatile int contact = -1;    // MCU key 01
-    public static volatile int lights = -1;     // MCU key 04
+    public static volatile int lights = -1;     // GPIO 60 (omgekeerd)
+    public static volatile int mcu04 = -1;      // MCU key 04, betekenis onbekend
     public static volatile float volts = -1f;   // MCU 05/02
     public static volatile long voltsTime = 0L;
     public static volatile Listener listener;
@@ -33,7 +35,7 @@ public final class CarSignals {
                 String rest = line.substring(i + 23);
                 int num = Integer.parseInt(rest.substring(0, rest.indexOf(' ')).trim());
                 int st = rest.charAt(rest.indexOf("state:") + 6) - '0';
-                if (num == 60) return set("handrem", st);
+                if (num == 60) return set("licht", st == 0 ? 1 : 0);
                 return false; // GPIO 62 = hartslag van de MCU, niet loggen
             }
             if (line.contains("FlyaudioGpioJNI")) return false; // dubbele interrupt-regels
@@ -44,7 +46,7 @@ public final class CarSignals {
                     String key = f.substring(8, 10);
                     int v = Integer.parseInt(f.substring(10, 12), 16);
                     if (key.equals("01")) return set("contact", v);
-                    if (key.equals("04")) return set("licht", v);
+                    if (key.equals("04")) return set("mcu04", v);
                     return false;
                 }
                 if (f.length() == 16 && f.startsWith("ff55050002")) {
@@ -65,6 +67,7 @@ public final class CarSignals {
         switch (name) {
             case "handrem": old = handbrake; handbrake = v; break;
             case "contact": old = contact; contact = v; break;
+            case "mcu04": old = mcu04; mcu04 = v; break;
             default: old = lights; lights = v; break;
         }
         if (old == v) return false;

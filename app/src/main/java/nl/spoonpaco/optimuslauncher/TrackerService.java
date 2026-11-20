@@ -244,7 +244,7 @@ public class TrackerService extends Service implements LocationListener {
 
     private void onCarSignal(String name, int v) {
         PowerLog.log(name + " -> " + v + (CarSignals.volts > 0 ? String.format(java.util.Locale.US, " (%.2f V)", CarSignals.volts) : ""));
-        if (name.equals("handrem") && v == 1 && speedKmh < MOVING_KMH
+        if (name.equals("handrem") && v == 1 && CarSignals.handbrake >= 0 && speedKmh < MOVING_KMH
                 && !store.tripEnded() && store.tripKm() >= MIN_TRIP_KM) {
             finishTrip("handrem erop");
         }
