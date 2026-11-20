@@ -97,7 +97,8 @@ public class MainActivity extends Activity {
         });
 
         // Contact aan (= tablet net opgestart): na 4 s vanzelf Android Auto openen, één keer per opstart
-        if (!aaAutoStarted && android.os.SystemClock.elapsedRealtime() < 5L * 60L * 1000L && installed(PKG_AA)) {
+        if (!aaAutoStarted && android.os.SystemClock.elapsedRealtime() < 5L * 60L * 1000L && installed(PKG_AA)
+                && getSharedPreferences("optimus", MODE_PRIVATE).getBoolean("startAA", false)) {
             aaAutoStarted = true;
             handler.postDelayed(() -> launch(PKG_AA, "Android Auto"), 4000L);
         }
@@ -369,6 +370,19 @@ public class MainActivity extends Activity {
             row.addView(card, lp);
         }
         box.addView(row);
+
+        box.addView(menuLabel("NA OPSTARTEN / CONTACT AAN", theme.accent, d));
+        final android.content.SharedPreferences op = getSharedPreferences("optimus", MODE_PRIVATE);
+        LinearLayout row3 = new LinearLayout(this);
+        row3.setOrientation(LinearLayout.HORIZONTAL);
+        boolean startAA = op.getBoolean("startAA", false);
+        row3.addView(menuButton(R.drawable.ic_apps, (startAA ? "" : "● ") + "LAUNCHER", d, v -> {
+            op.edit().putBoolean("startAA", false).apply(); if (dlg[0] != null) dlg[0].dismiss(); toast("Na opstarten: launcher"); }),
+                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
+        row3.addView(menuButton(R.drawable.ic_aa, (startAA ? "● " : "") + "ANDROID AUTO", d, v -> {
+            op.edit().putBoolean("startAA", true).apply(); if (dlg[0] != null) dlg[0].dismiss(); toast("Na opstarten: Android Auto"); }),
+                new LinearLayout.LayoutParams(0, (int) (72 * d), 1f));
+        box.addView(row3);
 
         box.addView(menuLabel("SYSTEEM", theme.accent, d));
         LinearLayout row2 = new LinearLayout(this);

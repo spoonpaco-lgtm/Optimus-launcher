@@ -50,8 +50,9 @@ public class WakeAnimActivity extends Activity {
     private void next() {
         if (done) return;
         done = true;
-        Intent aa = getPackageManager().getLaunchIntentForPackage("com.carletter.car");
-        Intent go = aa != null ? aa : new Intent(this, MainActivity.class);
+        boolean toAA = getSharedPreferences("optimus", MODE_PRIVATE).getBoolean("startAA", false);
+        Intent aa = toAA ? getPackageManager().getLaunchIntentForPackage("com.carletter.car") : null;
+        Intent go = aa != null ? aa : new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         go.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try { startActivity(go); } catch (Exception ignored) { }
         finish();

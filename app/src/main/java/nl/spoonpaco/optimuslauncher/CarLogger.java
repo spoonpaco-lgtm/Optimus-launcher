@@ -159,8 +159,8 @@ public class CarLogger {
 
     private static void readLoop() {
         String[][] commands = {
-                {"logcat", "-v", "threadtime", "-b", "main", "-b", "system", "-b", "events", "-b", "kernel"},
-                {"logcat", "-v", "threadtime", "-b", "main", "-b", "system", "-b", "events"},
+                {"logcat", "-v", "threadtime", "-T", "1", "-b", "main", "-b", "system", "-b", "events", "-b", "kernel"},
+                {"logcat", "-v", "threadtime", "-T", "1", "-b", "main", "-b", "system", "-b", "events"},
         };
         int variant = 0;
         int quickFails = 0;

@@ -137,6 +137,7 @@ public class TrackerService extends Service implements LocationListener {
         registerReceiver(powerRx, f);
         lastUpDelta = android.os.SystemClock.elapsedRealtime() - android.os.SystemClock.uptimeMillis();
         lastWakeElapsed = android.os.SystemClock.elapsedRealtime();
+        detectWakeAfterKill();
         CarSignals.listener = (name, v) -> ui.post(() -> onCarSignal(name, v));
         android.content.IntentFilter uf = new android.content.IntentFilter();
         uf.addAction(Intent.ACTION_MEDIA_MOUNTED);
@@ -245,7 +246,31 @@ public class TrackerService extends Service implements LocationListener {
     public static volatile long lastWakeElapsed = 0L;
 
     private long lastAnim = 0L;
-    private long contactOffAt = 0L;
+
+    // FlyAudio schiet de app vaak af bij contact uit; dit bestand onthoudt slaap/contact over dat heen.
+    private android.content.SharedPreferences powerPrefs() { return getSharedPreferences("power", MODE_PRIVATE); }
+
+    /** Bij (her)start van de dienst: kwamen we net uit slaap of na contact uit? Dan opstartfilmpje. */
+    private void detectWakeAfterKill() {
+        long el = android.os.SystemClock.elapsedRealtime();
+        long slept = el - android.os.SystemClock.uptimeMillis();
+        android.content.SharedPreferences sp = powerPrefs();
+        long prevEl = sp.getLong("el", -1), prevSlept = sp.getLong("slept", -1), offAt = sp.getLong("contactOffEl", 0);
+        boolean sameBoot = prevEl >= 0 && prevEl <= el;
+        if (el < 5L * 60L * 1000L) {
+            PowerLog.log("echte opstart (bootanimatie)");
+        } else if (sameBoot && prevSlept >= 0 && slept - prevSlept > 30_000L) {
+            playWakeAnim("dienst herstart na " + PowerLog.dur(slept - prevSlept) + " slaap");
+        } else if (sameBoot && offAt > 0 && el - offAt > 60_000L) {
+            playWakeAnim("dienst herstart, contact was " + PowerLog.dur(el - offAt) + " uit");
+        }
+        saveClocks();
+    }
+
+    private void saveClocks() {
+        long el = android.os.SystemClock.elapsedRealtime();
+        powerPrefs().edit().putLong("el", el).putLong("slept", el - android.os.SystemClock.uptimeMillis()).apply();
+    }
 
     /** Opstartfilmpje ("Optimus Black, Ready"), daarna gaat dat zelf door naar Android Auto. Max 1x per 2 min. */
     private void playWakeAnim(String why) {
@@ -266,11 +291,15 @@ public class TrackerService extends Service implements LocationListener {
         // Contact aan na minstens 1 min uit -> opstartfilmpje (tablet slaapt niet altijd echt, dus niet alleen op scherm/slaap vertrouwen)
         if (name.equals("contact")) {
             long now = android.os.SystemClock.elapsedRealtime();
-            if (v == 0) contactOffAt = now;
-            else if (v == 1 && contactOffAt > 0 && now - contactOffAt > 60_000L) {
-                playWakeAnim("contact aan na " + PowerLog.dur(now - contactOffAt));
-                lastWakeElapsed = now;
-                restartGps("contact aan");
+            long offAt = powerPrefs().getLong("contactOffEl", 0);
+            if (v == 0) powerPrefs().edit().putLong("contactOffEl", now).apply();
+            else if (v == 1) {
+                if (offAt > 0 && now - offAt > 60_000L) {
+                    playWakeAnim("contact aan na " + PowerLog.dur(now - offAt));
+                    lastWakeElapsed = now;
+                    restartGps("contact aan");
+                }
+                powerPrefs().edit().putLong("contactOffEl", 0).apply();
             }
         }
         PowerLog.log(name + " -> " + v + (CarSignals.volts > 0 ? String.format(java.util.Locale.US, " (%.2f V)", CarSignals.volts) : ""));
@@ -328,6 +357,7 @@ public class TrackerService extends Service implements LocationListener {
                 onWake(delta - lastUpDelta);
             }
             lastUpDelta = delta;
+            saveClocks();
             // GPS na wakker worden in de gaten houden
             if (!fixSinceWake && el - wakeAt > 120_000L && el - lastNoFixNote > 120_000L) {
                 lastNoFixNote = el;
