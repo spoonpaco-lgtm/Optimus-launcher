@@ -67,7 +67,7 @@ public class TripLogActivity extends Activity {
         top.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         workBtn = btn(Lang.t("MARKEER ALS WERKRIT", "MARK AS WORK TRIP"), false, v -> toggleWork());
         top.addView(workBtn, btnLp(250));
-        top.addView(btn("HIGH SCORES", false, v -> Dialogs.highscores(this, theme)), btnLp(170));
+        top.addView(btn("HIGH SCORES", false, v -> Dialogs.highscores(this, theme)), btnLp(190));
         top.addView(btn(Lang.t("NAAR USB", "TO USB"), false, v -> Dialogs.export(this)), btnLp(140));
         top.addView(btn(Lang.t("SLUITEN", "CLOSE"), true, v -> finish()), btnLp(140));
         root.addView(top);

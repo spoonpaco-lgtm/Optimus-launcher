@@ -13,6 +13,7 @@ public class RemoteActivity extends Activity {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         setContentView(new View(this));
+        Remote.remoteDecor = new java.lang.ref.WeakReference<>(getWindow().getDecorView());
         Remote.handle(this, getIntent());
     }
 

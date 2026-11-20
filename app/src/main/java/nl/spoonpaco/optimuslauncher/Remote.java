@@ -46,6 +46,8 @@ import java.util.Locale;
 public final class Remote {
     private static WeakReference<Activity> top = new WeakReference<>(null);
     private static volatile int resumed = 0;
+    /** Venster van RemoteActivity zelf: nooit als doel gebruiken. */
+    static WeakReference<View> remoteDecor;
 
     /** Staat er een scherm van de launcher-app vooraan (launcher, rittenlog, debug, ...)? */
     public static boolean ownScreenVisible() { return resumed > 0; }
@@ -80,7 +82,7 @@ public final class Remote {
             } catch (Throwable t) {
                 CarLogger.note("remote: " + cmd + " FOUT " + t);
             }
-        }, 350);
+        }, 600);
     }
 
     private static void run(Context c, String cmd, Intent in) throws Exception {
@@ -118,7 +120,8 @@ public final class Remote {
             f.setAccessible(true);
             List<View> v = new ArrayList<>((List<View>) f.get(wmg));
             List<View> shown = new ArrayList<>();
-            for (View x : v) if (x.isShown() && x.getWindowToken() != null) shown.add(x);
+            View skip = remoteDecor == null ? null : remoteDecor.get();
+            for (View x : v) if (x != skip && x.isShown() && x.getWindowToken() != null) shown.add(x);
             return shown;
         } catch (Exception e) {
             List<View> l = new ArrayList<>();
