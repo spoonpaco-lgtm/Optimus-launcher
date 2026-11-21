@@ -250,7 +250,9 @@ public class MusicActivity extends Activity implements MusicPlayer.Listener {
             java.util.Collections.sort(l, (a, b) -> {
                 int c = a.album.compareToIgnoreCase(b.album);
                 if (c != 0) return c;
-                if (a.no != b.no && a.no > 0 && b.no > 0) return a.no - b.no;
+                // tracknummer; zonder nummer (0) achteraan — consistente volgorde, anders crasht TimSort
+                int na = a.no > 0 ? a.no : Integer.MAX_VALUE, nb = b.no > 0 ? b.no : Integer.MAX_VALUE;
+                if (na != nb) return Integer.compare(na, nb);
                 return a.path.compareToIgnoreCase(b.path);
             });
         }

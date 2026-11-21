@@ -242,7 +242,8 @@ public final class MusicPlayer {
                 int c = a.album.compareToIgnoreCase(b.album);
                 if (mode != 2 && mode != 3 && c != 0) return c;
                 if (mode == 3) { int ca = a.artist.compareToIgnoreCase(b.artist); if (ca != 0) return ca; if (c != 0) return c; }
-                if (a.no != b.no && a.no > 0 && b.no > 0) return a.no - b.no;
+                int na = a.no > 0 ? a.no : Integer.MAX_VALUE, nb = b.no > 0 ? b.no : Integer.MAX_VALUE;
+                if (na != nb) return Integer.compare(na, nb);
                 return a.path.compareToIgnoreCase(b.path);
             });
             out.put(k, l);
