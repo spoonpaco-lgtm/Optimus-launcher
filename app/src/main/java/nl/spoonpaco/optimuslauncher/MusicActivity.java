@@ -216,12 +216,12 @@ public class MusicActivity extends Activity implements MusicPlayer.Listener {
             MusicPlayer.Track cur = mp.current();
             if (openGroup == null) {
                 List<MusicPlayer.Track> all = mp.all();
-                if (!all.isEmpty()) rows.add(new Object[]{Lang.t("ALLES AFSPELEN", "PLAY ALL"), all.size() + Lang.t(" NUMMERS", " TRACKS"),
+                if (!all.isEmpty()) rows.add(new Object[]{Lang.t("ALLES AFSPELEN", "PLAY ALL"), all.size() + (all.size() == 1 ? Lang.t(" NUMMER", " TRACK") : Lang.t(" NUMMERS", " TRACKS")),
                         (Runnable) () -> mp.play(all, 0), false});
                 for (java.util.Map.Entry<String, List<MusicPlayer.Track>> e : g.entrySet()) {
                     final String name = e.getKey();
                     boolean has = cur != null && e.getValue().contains(cur);
-                    rows.add(new Object[]{name, e.getValue().size() + Lang.t(" NUMMERS", " TRACKS"),
+                    rows.add(new Object[]{name, e.getValue().size() + (e.getValue().size() == 1 ? Lang.t(" NUMMER", " TRACK") : Lang.t(" NUMMERS", " TRACKS")),
                             (Runnable) () -> { openGroup = name; scroll = 0; }, has});
                 }
             } else {
@@ -263,6 +263,8 @@ public class MusicActivity extends Activity implements MusicPlayer.Listener {
 
         /** Eigen placeholder-hoes: zon boven een raster (zelf getekend). */
         private void placeholder(Canvas c, RectF r, int key) {
+            c.save();
+            c.clipRect(r);
             Paint q = new Paint(Paint.ANTI_ALIAS_FLAG);
             q.setShader(new LinearGradient(0, r.top, 0, r.centerY(), 0xFF14061E, 0xFF5A1430, Shader.TileMode.CLAMP));
             c.drawRect(r.left, r.top, r.right, r.centerY(), q);
@@ -275,6 +277,7 @@ public class MusicActivity extends Activity implements MusicPlayer.Listener {
             q.setColor(0xFFD23CC8); q.setStrokeWidth(2);
             for (int i = 0; i <= 8; i++) c.drawLine(r.centerX(), r.centerY(), r.left - r.width() * 0.3f + i * r.width() * 1.6f / 8f, r.bottom, q);
             for (int i = 1; i < 7; i++) { float yy = r.centerY() + r.height() / 2f * (float) Math.pow(i / 7f, 1.8); c.drawLine(r.left, yy, r.right, yy, q); }
+            c.restore();
         }
 
         private boolean hasPerm() { return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED; }
