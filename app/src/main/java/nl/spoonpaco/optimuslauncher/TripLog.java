@@ -105,7 +105,9 @@ public final class TripLog {
         if (!f.exists()) append(f, HEADER + "\n");
         append(f, line);
         CarLogger.note("rittenlog: rit opgeslagen (" + String.format(Locale.US, "%.1f km", sum[0]) + ")");
-        WorkLog.onTripEnded(c, id);
+        double sLat0 = 0, sLon0 = 0;
+        try { sLat0 = Double.parseDouble(s.getString("sLat", "0")); sLon0 = Double.parseDouble(s.getString("sLon", "0")); } catch (Exception ignored) { }
+        WorkLog.onTripEnded(c, id, sLat0, sLon0, eLat, eLon, sum[0]);
     }
 
     public static boolean active(Context c) { return sp(c).getLong("id", 0) != 0; }

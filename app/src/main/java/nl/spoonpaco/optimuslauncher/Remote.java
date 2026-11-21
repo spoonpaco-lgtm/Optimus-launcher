@@ -71,18 +71,25 @@ public final class Remote {
         });
     }
 
+    /** Commando's één voor één uitvoeren, met tussenruimte: snel na elkaar tikken gaat dan niet verloren. */
+    private static long nextFree = 0;
+
     public static void handle(final Context ctx, final Intent in) {
         final String cmd = in.getStringExtra("cmd");
         if (cmd == null) return;
-        // even wachten tot het vorige venster weer bovenaan staat (RemoteActivity is dan weg)
-        H.postDelayed(() -> {
+        long now = SystemClock.uptimeMillis();
+        // minstens 600 ms na ontvangst (RemoteActivity is dan weg) en 450 ms na het vorige commando
+        long at = Math.max(now + 600, nextFree);
+        nextFree = at + 450;
+        final Intent copy = new Intent(in);
+        H.postAtTime(() -> {
             try {
-                run(ctx.getApplicationContext(), cmd, in);
+                run(ctx.getApplicationContext(), cmd, copy);
                 CarLogger.note("remote: " + cmd + " ok");
             } catch (Throwable t) {
                 CarLogger.note("remote: " + cmd + " FOUT " + t);
             }
-        }, 600);
+        }, at);
     }
 
     private static void run(Context c, String cmd, Intent in) throws Exception {

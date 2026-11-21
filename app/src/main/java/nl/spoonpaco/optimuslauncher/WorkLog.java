@@ -49,7 +49,18 @@ public final class WorkLog {
     }
 
     /** Aanroepen als een rit is afgesloten (vanuit TripLog.end). */
-    public static void onTripEnded(Context c, long id) {
+    public static void onTripEnded(Context c, long id) { onTripEnded(c, id, 0, 0, 0, 0, 0f); }
+
+    public static void onTripEnded(Context c, long id, double sLat, double sLon, double eLat, double eLon, float km) {
+        if (!flag(c) && km >= 1f) {
+            // geen werkrit aangezet, maar begin of eind is een opgeslagen locatie (niet thuis): straks vragen
+            Locations.Loc l = Locations.match(c, eLat, eLon);
+            if (l == null || isHome(l)) l = Locations.match(c, sLat, sLon);
+            if (l != null && !isHome(l)) {
+                sp(c).edit().putLong("ask", id).putString("askName", l.name).putFloat("askKm", km).apply();
+                CarLogger.note("werkrit-vraag klaargezet (" + l.name + ")");
+            }
+        }
         if (flag(c)) {
             Set<String> s = ids(c);
             s.add(String.valueOf(id));
@@ -58,6 +69,17 @@ public final class WorkLog {
             write(c);
         }
     }
+
+    private static boolean isHome(Locations.Loc l) {
+        String n = l.name == null ? "" : l.name.trim().toLowerCase(java.util.Locale.ROOT);
+        return n.equals("thuis") || n.equals("home") || n.startsWith("thuis ") || n.startsWith("home ");
+    }
+
+    /** Openstaande vraag "Was dit een werkrit?": rit-id, of 0. */
+    public static long pendingAsk(Context c) { return sp(c).getLong("ask", 0); }
+    public static String pendingName(Context c) { return sp(c).getString("askName", ""); }
+    public static float pendingKm(Context c) { return sp(c).getFloat("askKm", 0f); }
+    public static void clearAsk(Context c) { sp(c).edit().remove("ask").remove("askName").remove("askKm").apply(); }
 
     public static List<TripLog.Trip> trips(Context c) {
         Set<String> s = ids(c);

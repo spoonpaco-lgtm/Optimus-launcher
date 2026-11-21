@@ -19,10 +19,14 @@ import java.util.List;
 public final class InputForm {
 
     public static final class Field {
-        final String label, hint; final boolean date; final StringBuilder v = new StringBuilder();
+        final String label, hint; final boolean date; boolean text; final StringBuilder v = new StringBuilder();
         public Field(String label, String value, String hint, boolean date) {
             this.label = label; this.hint = hint == null ? "" : hint; this.date = date;
             if (value != null) v.append(value);
+        }
+        /** Tekstveld (letters): toont een QWERTY-toetsenbord in plaats van cijfers. */
+        public static Field text(String label, String value, String hint) {
+            Field f = new Field(label, value, hint, false); f.text = true; return f;
         }
     }
 
@@ -31,10 +35,92 @@ public final class InputForm {
 
     public static void show(Activity a, String title, String sub, Field[] fields, String toggleLabel, boolean toggleOn,
                             String extraKey, Save save) {
+        show(a, title, sub, fields, toggleLabel, toggleOn, extraKey, save, null, null);
+    }
+
+    /** Met een extra knop (bv. VERWIJDEREN) naast annuleren/opslaan. */
+    public static void show(Activity a, String title, String sub, Field[] fields, String toggleLabel, boolean toggleOn,
+                            String extraKey, Save save, String altLabel, Runnable alt) {
         final Dialog dlg = new Dialog(a, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         FormView v = new FormView(a, MainActivity.currentTheme(), title, sub, fields, toggleLabel, toggleOn, extraKey, save, dlg::dismiss);
+        v.altLabel = altLabel;
+        v.alt = alt == null ? null : () -> { alt.run(); dlg.dismiss(); };
         dlg.setContentView(v);
         dlg.show();
+    }
+
+    /** Keuzelijst in cockpitstijl (bv. locaties). Tik op een regel = pick(index). */
+    public static void list(Activity a, String title, String sub, String[] labels, String[] subs, java.util.function.IntConsumer pick) {
+        final Dialog dlg = new Dialog(a, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        dlg.setContentView(new ListView2(a, MainActivity.currentTheme(), title, sub, labels, subs, i -> { dlg.dismiss(); pick.accept(i); }, dlg::dismiss));
+        dlg.show();
+    }
+
+    private static final class ListView2 extends View {
+        private final CockpitView pt; private final Theme theme;
+        private final String title, sub; private final String[] labels, subs;
+        private final java.util.function.IntConsumer pick; private final Runnable close;
+        private float s = 1f, H = 600f, scroll, downY, lastY; private boolean dragging;
+        private final List<Object[]> hits = new ArrayList<>();
+        private final RectF list = new RectF(24, 104, 1216, 0);
+
+        ListView2(Context c, Theme t, String title, String sub, String[] labels, String[] subs, java.util.function.IntConsumer pick, Runnable close) {
+            super(c);
+            setLayerType(LAYER_TYPE_SOFTWARE, null);
+            pt = new CockpitView(c, null); pt.setTheme(t); theme = t;
+            this.title = title; this.sub = sub; this.labels = labels; this.subs = subs; this.pick = pick; this.close = close;
+        }
+        @Override protected void onSizeChanged(int w, int h, int ow, int oh) { s = w / 1240f; H = h / s; list.bottom = H - 110; }
+        @Override public boolean onTouchEvent(MotionEvent e) {
+            float x = e.getX() / s, y = e.getY() / s;
+            switch (e.getAction()) {
+                case MotionEvent.ACTION_DOWN: downY = lastY = y; dragging = false; return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (list.contains(x, downY) && Math.abs(y - downY) > 10) dragging = true;
+                    if (dragging) { scroll = Math.max(0, scroll - (y - lastY)); lastY = y; invalidate(); }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    if (dragging) return true;
+                    for (int i = hits.size() - 1; i >= 0; i--) if (((RectF) hits.get(i)[0]).contains(x, y)) { ((Runnable) hits.get(i)[1]).run(); return true; }
+                    return true;
+            }
+            return true;
+        }
+        @Override protected void onDraw(Canvas c) {
+            hits.clear();
+            c.save(); c.scale(s, s);
+            int key = theme.key;
+            pt.uiBackground(c, 1240, H);
+            pt.uiBezel(c, new RectF(0, 0, 1240, H - 2));
+            pt.uiLamp(c, 44, 46, 11, key, true);
+            pt.uiText(c, title, 68, 56, 26, key, Paint.Align.LEFT);
+            if (!sub.isEmpty()) pt.uiText(c, sub, 70, 82, 11, 0xFF8E8E9A, Paint.Align.LEFT);
+            float rowH = 82;
+            float max = Math.max(0, labels.length * rowH - list.height());
+            if (scroll > max) scroll = max;
+            c.save(); c.clipRect(list);
+            for (int i = 0; i < labels.length; i++) {
+                float y = list.top + i * rowH - scroll;
+                if (y + rowH < list.top || y > list.bottom) continue;
+                RectF r = new RectF(list.left, y + 2, list.right, y + rowH - 4);
+                Paint q = new Paint(); q.setColor(0xFF121216); c.drawRoundRect(r, 5, 5, q);
+                pt.uiLamp(c, r.left + 22, r.centerY(), 7, key, false);
+                c.save(); c.clipRect(r.left, r.top, r.right - 30, r.bottom);
+                pt.uiText(c, labels[i].toUpperCase(java.util.Locale.ROOT), r.left + 46, r.top + 33, 20, 0xFFE8E8F0, Paint.Align.LEFT);
+                if (subs != null && i < subs.length) pt.uiText(c, subs[i].toUpperCase(java.util.Locale.ROOT), r.left + 46, r.top + 60, 12, 0xFFA8A8B4, Paint.Align.LEFT);
+                c.restore();
+                pt.uiText(c, ">", r.right - 12, r.centerY() + 7, 18, 0xFF8E8E9A, Paint.Align.RIGHT);
+                final int idx = i;
+                RectF hr = new RectF(r.left, Math.max(r.top, list.top), r.right, Math.min(r.bottom, list.bottom));
+                if (hr.height() > 10) hits.add(new Object[]{hr, (Runnable) () -> pick.accept(idx)});
+            }
+            c.restore();
+            RectF cl = new RectF(1240 - 24 - 260, H - 88, 1240 - 24, H - 26);
+            pt.uiButton(c, cl, Lang.t("SLUITEN", "CLOSE"), true, key, 16);
+            hits.add(new Object[]{cl, close});
+            c.restore();
+            c.save(); c.scale(s, s); pt.uiScanlines(c, 1240, H); c.restore();
+        }
     }
 
     private static final class FormView extends View {
@@ -44,6 +130,7 @@ public final class InputForm {
         private boolean toggle; private int sel = 0; private boolean fresh = true;
         private String error = ""; private String pressed = ""; private long pressedAt;
         private float s = 1f, H = 600f;
+        String altLabel; Runnable alt;
         private final List<Object[]> hits = new ArrayList<>();
 
         FormView(Context c, Theme t, String title, String sub, Field[] f, String toggleLabel, boolean toggleOn,
@@ -83,6 +170,14 @@ public final class InputForm {
             }
             if (k.equals("WIS") || k.equals("CLR")) { f.v.setLength(0); fresh = false; return; }
             if (fresh) { f.v.setLength(0); fresh = false; }
+            if (f.text) {
+                if (k.equals("SPATIE") || k.equals("SPACE")) { if (f.v.length() > 0 && f.v.charAt(f.v.length() - 1) != ' ') f.v.append(' '); return; }
+                if (f.v.length() >= 40) return;
+                // eerste letter van elk woord hoofdletter, de rest klein ("THUIS" -> "Thuis")
+                boolean wordStart = f.v.length() == 0 || f.v.charAt(f.v.length() - 1) == ' ';
+                f.v.append(wordStart ? k : k.toLowerCase(java.util.Locale.ROOT));
+                return;
+            }
             if (k.equals(".")) {
                 if (f.v.indexOf(".") < 0) f.v.append(f.v.length() == 0 ? "0." : ".");
                 return;
@@ -138,10 +233,43 @@ public final class InputForm {
             }
             if (!error.isEmpty()) pt.uiText(c, error, 40, Math.min(y + 18, H - 16), 12, RED, Paint.Align.LEFT);
 
+            boolean textMode = fields.length > 0 && fields[sel].text;
+            float kx0 = 764, kx1 = 1212, gap = 12, bottomH = 72;
+            if (textMode) drawQwerty(c, key, kx0, kx1, 26, H - bottomH - 40);
+            else drawNumpad(c, key, kx0, kx1, gap, bottomH);
+            drawBottom(c, key, kx0, kx1, gap, bottomH);
+            c.restore();
+            c.save(); c.scale(s, s);
+            pt.uiScanlines(c, 1240, H);
+            c.restore();
+        }
+
+        private void drawQwerty(Canvas c, int key, float kx0, float kx1, float top, float bottom) {
+            String[] rowsK = {"1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"};
+            float gap = 6, kh = (bottom - top - 4 * gap) / 5f, kw = (kx1 - kx0 - 9 * gap) / 10f;
+            boolean fresh2 = System.currentTimeMillis() - pressedAt < 150;
+            for (int r = 0; r < 4; r++) {
+                String row = rowsK[r];
+                float off = (10 - row.length()) * (kw + gap) / 2f;
+                for (int i = 0; i < row.length(); i++) {
+                    final String k = String.valueOf(row.charAt(i));
+                    RectF kr = new RectF(kx0 + off + i * (kw + gap), top + r * (kh + gap), kx0 + off + i * (kw + gap) + kw, top + r * (kh + gap) + kh);
+                    pt.uiKey(c, kr, k, fresh2 && k.equals(pressed), key, 22);
+                    hit(kr, () -> key(k));
+                }
+            }
+            float by = top + 4 * (kh + gap), w3 = kx1 - kx0 - 2 * gap;
+            RectF sp = new RectF(kx0, by, kx0 + w3 * 0.5f, by + kh), bs = new RectF(sp.right + gap, by, sp.right + gap + w3 * 0.25f, by + kh),
+                    cl = new RectF(bs.right + gap, by, kx1, by + kh);
+            pt.uiKey(c, sp, Lang.t("SPATIE", "SPACE"), false, key, 16); hit(sp, () -> key(Lang.t("SPATIE", "SPACE")));
+            pt.uiKey(c, bs, "⌫", false, key, 22); hit(bs, () -> key("⌫"));
+            pt.uiKey(c, cl, Lang.t("WIS", "CLR"), false, key, 16); hit(cl, () -> key("WIS"));
+        }
+
+        private void drawNumpad(Canvas c, int key, float kx0, float kx1, float gap, float bottomH) {
             // ---- toetsenblok ----
             String[] keys = {"1", "2", "3", "4", "5", "6", "7", "8", "9", extraKey, "0", "⌫"};
-            float kx0 = 764, kx1 = 1212, ky0 = 26, gap = 12;
-            float bottomH = 72;
+            float ky0 = 26;
             float kh = (H - ky0 - bottomH - 40 - gap * 3) / 4f, kw = (kx1 - kx0 - gap * 2) / 3f;
             boolean fresh2 = System.currentTimeMillis() - pressedAt < 150;
             for (int i = 0; i < 12; i++) {
@@ -151,11 +279,22 @@ public final class InputForm {
                 pt.uiKey(c, r, k, fresh2 && k.equals(pressed), key, k.length() > 1 ? 18 : 30);
                 hit(r, () -> key(k));
             }
-            // ---- opslaan / annuleren ----
+        }
+
+        private void drawBottom(Canvas c, int key, float kx0, float kx1, float gap, float bottomH) {
+            // ---- (extra) / annuleren / opslaan ----
             float by = H - bottomH - 22;
-            RectF cancel = new RectF(kx0, by, kx0 + (kx1 - kx0 - gap) / 2f, by + bottomH);
+            int n = alt != null ? 3 : 2;
+            float bw = (kx1 - kx0 - (n - 1) * gap) / n;
+            if (alt != null) {
+                RectF ar = new RectF(kx0, by, kx0 + bw, by + bottomH);
+                pt.uiButton(c, ar, altLabel, false, pt.uiRed(), 13);
+                hit(ar, alt);
+                kx0 += bw + gap;
+            }
+            RectF cancel = new RectF(kx0, by, kx0 + bw, by + bottomH);
             RectF ok = new RectF(cancel.right + gap, by, kx1, by + bottomH);
-            pt.uiButton(c, cancel, Lang.t("ANNULEREN", "CANCEL"), false, key, 15);
+            pt.uiButton(c, cancel, Lang.t("ANNULEREN", "CANCEL"), false, key, n == 3 ? 13 : 15);
             pt.uiButton(c, ok, Lang.t("OPSLAAN", "SAVE"), true, key, 16);
             hit(cancel, close);
             hit(ok, () -> {
@@ -164,10 +303,6 @@ public final class InputForm {
                 String err = save.save(vals, toggle);
                 if (err == null) close.run(); else error = err;
             });
-            c.restore();
-            c.save(); c.scale(s, s);
-            pt.uiScanlines(c, 1240, H);
-            c.restore();
         }
     }
 }

@@ -50,7 +50,7 @@ public class CockpitView extends View {
     public int rangeKm = -1;
     public float tankL = -1f;
     public float volts = -1f;
-    public boolean lContact, lMotor, lLicht, lTrips, lAuto, lLog;
+    public boolean lContact, lMotor, lLicht, lTrips, lAuto, lLog;   // lLog = NAV-lampje (Maps-route actief via AA)
     /** Accubewaker: 0 goed, 1 let op (geel), 2 slecht (rood). */
     public int accuWarn = 0;
     /** Kleur voor de hint onderaan een kaart (0 = standaard gedimd). */
@@ -486,7 +486,7 @@ public class CockpitView extends View {
         float x = r.left + 20;
         // lampjes 3 x 2
         float bx = r.left + 18, bw = r.width() - 36;
-        String[] n = Lang.en ? new String[]{"IGNITION", "ENGINE", "LIGHTS", "WORK", "AUTO", "LOG"} : new String[]{"CONTACT", "MOTOR", "LICHT", "WERKRIT", "AUTO", "LOG"};
+        String[] n = Lang.en ? new String[]{"IGNITION", "ENGINE", "LIGHTS", "WORK", "AUTO", "NAV"} : new String[]{"CONTACT", "MOTOR", "LICHT", "WERKRIT", "AUTO", "NAV"};
         int[] col = {0xFFF4E04D, WG, WA, 0xFFB66BFF, 0xFF2F8CFF, WG};
         boolean[] on = {lContact, lMotor, lLicht, lTrips, lAuto, lLog};
         for (int i = 0; i < 6; i++) {

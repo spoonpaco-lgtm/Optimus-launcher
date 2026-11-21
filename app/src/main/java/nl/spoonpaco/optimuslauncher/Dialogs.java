@@ -126,39 +126,33 @@ public final class Dialogs {
             Toast.makeText(a, Lang.t("Nog geen locaties. Druk ter plekke op HIER OPSLAAN.", "No places yet. Press SAVE HERE on site."), Toast.LENGTH_LONG).show();
             return;
         }
-        String[] items = new String[locs.size()];
+        String[] names = new String[locs.size()], subs = new String[locs.size()];
         for (int i = 0; i < locs.size(); i++) {
             Locations.Loc l = locs.get(i);
-            items[i] = l.name + (l.addr.isEmpty() ? Lang.t("  (adres volgt)", "  (address pending)") : "  —  " + l.addr);
+            names[i] = l.name;
+            subs[i] = l.addr.isEmpty() ? Lang.t("ADRES VOLGT ZODRA ER INTERNET IS", "ADDRESS FOLLOWS WHEN ONLINE") : l.addr;
         }
-        new AlertDialog.Builder(a, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(Lang.t("Locaties (tik = naam wijzigen)", "Places (tap = rename)"))
-                .setItems(items, (dd, i) -> renameLocation(a, i, done))
-                .setNegativeButton(Lang.t("Sluiten", "Close"), null)
-                .show();
+        InputForm.list(a, Lang.t("LOCATIES", "PLACES"), Lang.t("TIK OP EEN LOCATIE OM DE NAAM TE WIJZIGEN", "TAP A PLACE TO RENAME IT"), names, subs,
+                i -> renameLocation(a, i, done));
     }
 
     public static void renameLocation(final Activity a, final int i, final Runnable done) {
         final List<Locations.Loc> locs = Locations.all(a);
         if (i < 0 || i >= locs.size()) return;
-        final EditText e = new EditText(a);
-        e.setText(locs.get(i).name);
-        e.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(a, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(Lang.t("Naam (bv. Thuis, school, klant)", "Name (e.g. Home, school, client)"))
-                .setMessage(locs.get(i).addr.isEmpty() ? Lang.t("Adres volgt zodra er internet is", "Address follows when online") : locs.get(i).addr)
-                .setView(e)
-                .setPositiveButton(Lang.t("Opslaan", "Save"), (dd, w) -> {
-                    locs.get(i).name = e.getText().toString().trim();
+        final Locations.Loc l = locs.get(i);
+        InputForm.Field[] f = {InputForm.Field.text(Lang.t("NAAM (BV. THUIS, SCHOOL, KLANT)", "NAME (E.G. HOME, SCHOOL, CLIENT)"), l.name, Lang.t("naam", "name"))};
+        String sub = l.addr.isEmpty() ? Lang.t("ADRES VOLGT ZODRA ER INTERNET IS", "ADDRESS FOLLOWS WHEN ONLINE") : l.addr.toUpperCase(Locale.ROOT);
+        InputForm.show(a, Lang.t("LOCATIE", "PLACE"), sub, f, null, false, "",
+                (v, t) -> {
+                    String n = v[0].trim();
+                    if (n.isEmpty()) return Lang.t("VUL EEN NAAM IN", "ENTER A NAME");
+                    l.name = n;
                     Locations.save(a, locs); WorkLog.write(a);
                     if (done != null) done.run();
-                })
-                .setNeutralButton(Lang.t("Verwijderen", "Delete"), (dd, w) -> {
-                    locs.remove(i); Locations.save(a, locs); WorkLog.write(a);
-                    if (done != null) done.run();
-                })
-                .setNegativeButton(Lang.t("Annuleren", "Cancel"), null)
-                .show();
+                    return null;
+                },
+                Lang.t("VERWIJDEREN", "DELETE"),
+                () -> { locs.remove(l); Locations.save(a, locs); WorkLog.write(a); if (done != null) done.run(); });
     }
 
     // ---------- high scores ----------

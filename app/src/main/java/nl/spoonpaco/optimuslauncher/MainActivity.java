@@ -273,6 +273,38 @@ public class MainActivity extends Activity {
 
     private Theme theme = Theme.LED;
 
+    private int lastNav = -1;
+
+    /** Rit eindigde bij een opgeslagen locatie zonder werkrit-knop: één keer vragen. */
+    private void askWorkTrip() {
+        long id = WorkLog.pendingAsk(this);
+        if (id == 0 || !visible) return;
+        boolean fresh = System.currentTimeMillis() - TrackerService.lastFixTime < 5000;
+        if (fresh && TrackerService.speedKmh > 5) return;      // niet tijdens het rijden
+        String name = WorkLog.pendingName(this);
+        float km = WorkLog.pendingKm(this);
+        WorkLog.clearAsk(this);
+        InputForm.list(this, Lang.t("WAS DIT EEN WERKRIT?", "WAS THIS A WORK TRIP?"),
+                String.format(java.util.Locale.US, Lang.t("RIT VAN %.1f KM  ·  LOCATIE: %s", "TRIP OF %.1f KM  ·  PLACE: %s"), km, name.toUpperCase(java.util.Locale.ROOT)),
+                new String[]{Lang.t("JA, WERKRIT", "YES, WORK TRIP"), Lang.t("NEE", "NO")},
+                new String[]{Lang.t("WORDT TOEGEVOEGD AAN SPOONPACO-RITTEN", "WILL BE ADDED TO SPOONPACO-RITTEN"), Lang.t("PRIVÉRIT, NIETS OPSLAAN", "PRIVATE TRIP, SAVE NOTHING")},
+                i -> {
+                    if (i == 0) {
+                        WorkLog.setWork(this, id, true);
+                        CarLogger.note("werkrit achteraf bevestigd (" + name + ")");
+                        toast(Lang.t("Opgeslagen als werkrit", "Saved as work trip"));
+                    }
+                });
+    }
+
+    /** Heeft Maps via Android Auto een route actief? CarLetter zet dit in een systeeminstelling. */
+    private boolean navActive() {
+        int v = 0;
+        try { v = Settings.System.getInt(getContentResolver(), "carletter_navi_state", 0); } catch (Exception ignored) { }
+        if (v != lastNav) { if (lastNav != -1) CarLogger.note("nav: " + (v == 1 ? "route actief" : "geen route") + " (carletter_navi_state=" + v + ")"); lastNav = v; }
+        return v == 1;
+    }
+
     /** EQ: geluidsinstellingen van FlyAudio (nu via menu Instellingen). */
     void openEq() {
         for (String pk : new String[]{"com.flyaudio.soundeffect", "com.flyaudio.service.dsp", "com.flyaudio.settings"}) {
@@ -283,7 +315,10 @@ public class MainActivity extends Activity {
 
     private static final int[] KEY_IDS = {R.id.btn_aa, R.id.btn_music, R.id.btn_radio, R.id.btn_video,
             R.id.btn_trips, R.id.btn_apps, R.id.btn_menu};
-    private static final String[] KEY_TEXT = {"AUTO", "MUZIEK", "FM", "VIDEO", "RIT", "APPS", "MENU"};
+    private static String[] keyText() {
+        return Lang.en ? new String[]{"AUTO", "MUSIC", "FM", "VIDEO", "TRIP", "APPS", "MENU"}
+                       : new String[]{"AUTO", "MUZIEK", "FM", "VIDEO", "RIT", "APPS", "MENU"};
+    }
     private static final int[] KEY_ICON = {R.drawable.ic_aa, R.drawable.ic_music, R.drawable.ic_radio, R.drawable.ic_video,
             R.drawable.ic_trip, R.drawable.ic_apps, R.drawable.ic_menu};
 
@@ -298,9 +333,10 @@ public class MainActivity extends Activity {
         for (int i = 0; i < KEY_IDS.length; i++) {
             android.widget.ImageButton b = findViewById(KEY_IDS[i]);
             b.setBackground(keyBackground(t.key, d));
+            b.setContentDescription((KEY_IDS[i] == R.id.btn_aa && aaKeyIsNav) ? "NAV" : keyText()[i]);
             if (t.leds) {
                 b.setImageTintList(null);
-                String label = (KEY_IDS[i] == R.id.btn_aa && aaKeyIsNav) ? "NAV" : KEY_TEXT[i];
+                String label = (KEY_IDS[i] == R.id.btn_aa && aaKeyIsNav) ? "NAV" : keyText()[i];
                 b.setImageDrawable(new LedTextDrawable(label, t.key, 3.2f * d));
             } else {
                 b.setImageResource(KEY_ICON[i] == R.drawable.ic_aa && aaKeyIsNav ? R.drawable.ic_nav : KEY_ICON[i]);
@@ -515,7 +551,8 @@ public class MainActivity extends Activity {
             c.npSub = BtMedia.album == null ? "" : BtMedia.album; c.npFrac = 0; c.npTime = ""; c.npTotal = "";
         } else c.npShow = false;
         if (scanner != null) scanner.update(CarSignals.mcu04 == 1 || mpl.isPlaying(), Math.max(BatteryHealth.level, store.serviceDue(Clock.now()) ? 1 : 0));
-        c.lLog = CarLogger.state == 2;
+        c.lLog = navActive();
+        askWorkTrip();
         c.invalidate();
     }
 
