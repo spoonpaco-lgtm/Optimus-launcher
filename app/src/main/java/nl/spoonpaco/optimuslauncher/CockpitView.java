@@ -23,12 +23,19 @@ public class CockpitView extends View {
         void onClockLongPress();
         void onTankTap();
         default void onMusicTap() { }
+        /** 0 = vorige, 1 = speel/pauze, 2 = volgende */
+        default void onMusicKey(int k) { }
     }
 
     // ---- nu speelt (wisselt elke 10 s met het kompas) ----
     public boolean npShow;
     public String npTitle = "", npArtist = "", npSub = "", npSrc = "", npTime = "", npTotal = "";
     public float npFrac;
+    public boolean npPlaying;
+    private long npPinUntil, npPressAt;
+    private int npPressed = -1;
+    private boolean npVisible;
+    private final RectF[] npKeys = { new RectF(), new RectF(), new RectF() };
     private final RectF rBand = new RectF(310, 0, 1064, 62);
 
     // ---- live waarden (gezet door MainActivity) ----
@@ -258,7 +265,9 @@ public class CockpitView extends View {
 
         // kompas (of "nu speelt" als er muziek speelt, om de 10 s wisselend)
         RectF r = new RectF(312, 4, 1062, 58);
-        if (npShow && (System.currentTimeMillis() / 10000) % 2 == 1) drawNowPlaying(c, r); else {
+        long nowMs = System.currentTimeMillis();
+        npVisible = npShow && (nowMs < npPinUntil || (nowMs / 10000) % 2 == 1);
+        if (npVisible) drawNowPlaying(c, r); else {
         c.save();
         c.clipRect(r);
         float hd = heading < 0 ? 0 : heading;
@@ -335,16 +344,22 @@ public class CockpitView extends View {
 
     private void drawNowPlaying(Canvas c, RectF r) {
         window(c, r, tAmb, eAmb);
-        lampAt(c, r.left + 20, r.centerY(), 7, GRN, true);
+        lampAt(c, r.left + 20, r.centerY(), 7, GRN, npPlaying);
         text(c, npSrc, r.left + 34, r.centerY() + 4, 10, GRN);
+        // knoppen achter de tekst: vorige / speel-pauze / volgende
+        float kw = 46, kg = 6, kr = r.right - 262;
+        for (int i = 2; i >= 0; i--) { npKeys[i].set(kr - kw, r.top + 6, kr, r.bottom - 6); kr -= kw + kg; }
         c.save();
-        c.clipRect(r.left + 76, r.top, r.right - 330, r.bottom);
+        c.clipRect(r.left + 76, r.top, npKeys[0].left - 10, r.bottom);
         String main = npTitle + (npArtist.isEmpty() ? "" : "  ·  " + npArtist);
         text(c, main.toUpperCase(Locale.ROOT), r.left + 82, r.top + 26, 17, AMB);
         text(c, npSub.toUpperCase(Locale.ROOT), r.left + 82, r.bottom - 8, 9, dark(AMB, 0.65f));
         c.restore();
-        int lit = Math.round(Math.max(0f, Math.min(1f, npFrac)) * 26);
-        bar(c, r.right - 320, r.bottom - 18, r.right - 92, 8, 26, lit, 2, 0, 0);
+        boolean pressFresh = System.currentTimeMillis() - npPressAt < 250;
+        for (int i = 0; i < 3; i++) drawMusicKey(c, npKeys[i], i, pressFresh && npPressed == i);
+        if (pressFresh) postInvalidateDelayed(260);
+        int lit = Math.round(Math.max(0f, Math.min(1f, npFrac)) * 18);
+        bar(c, r.right - 250, r.bottom - 18, r.right - 92, 8, 18, lit, 2, 0, 0);
         p.setTextAlign(Paint.Align.RIGHT);
         if (!npTime.isEmpty()) {
             drawSeg(c, npTime, r.right - 14 - segWidth(npTime, 20), r.top + 6, 20, AMB);
@@ -352,6 +367,43 @@ public class CockpitView extends View {
         }
         p.setTextAlign(Paint.Align.LEFT);
         glass(c, r);
+    }
+
+    /** Kleine chromen drukknop met icoon in amber. */
+    private void drawMusicKey(Canvas c, RectF k, int which, boolean down) {
+        p.setShader(new LinearGradient(0, k.top, 0, k.bottom, 0xFF9A9AA4, 0xFF34343C, Shader.TileMode.CLAMP));
+        c.drawRoundRect(k.left - 2, k.top - 2, k.right + 2, k.bottom + 2, 7, 7, p);
+        p.setShader(new LinearGradient(0, k.top, 0, k.bottom, down ? 0xFF0D0D10 : 0xFF26262D, down ? 0xFF1A1A20 : 0xFF0D0D10, Shader.TileMode.CLAMP));
+        c.drawRoundRect(k, 6, 6, p);
+        p.setShader(null);
+        int col = down ? AMB : dark(AMB, 0.8f);
+        if (down) { glow.setColor(AMB); glow.setMaskFilter(new BlurMaskFilter(6, BlurMaskFilter.Blur.NORMAL)); }
+        Paint ip = down ? glow : p;
+        float cx = k.centerX(), cy = k.centerY(), h = 7;
+        for (int pass = 0; pass < (down ? 2 : 1); pass++) {
+            Paint q = pass == 0 && down ? glow : p;
+            q.setColor(col);
+            android.graphics.Path t = new android.graphics.Path();
+            if (which == 1) {
+                if (npPlaying) {
+                    c.drawRect(cx - 6, cy - h, cx - 2, cy + h, q);
+                    c.drawRect(cx + 2, cy - h, cx + 6, cy + h, q);
+                } else {
+                    t.moveTo(cx - 5, cy - h); t.lineTo(cx + 7, cy); t.lineTo(cx - 5, cy + h); t.close();
+                    c.drawPath(t, q);
+                }
+            } else {
+                float d = which == 2 ? 1 : -1;
+                for (int j = 0; j < 2; j++) {
+                    float bx = cx + d * (j == 0 ? -7 : 3);
+                    t.moveTo(bx, cy - 6); t.lineTo(bx + d * 9, cy); t.lineTo(bx, cy + 6); t.close();
+                }
+                c.drawPath(t, q);
+                float ex = cx + d * 12;
+                c.drawRect(Math.min(ex, ex + d * 2), cy - 6, Math.max(ex, ex + d * 2), cy + 6, q);
+            }
+        }
+        glow.setMaskFilter(null);
     }
 
     private void drawSpeedPanel(Canvas c) {
@@ -873,7 +925,18 @@ public class CockpitView extends View {
                 removeCallbacks(longPress);
                 if (downInClock) { downInClock = false; return true; }
                 if (listener == null) return true;
-                if (rBand.contains(x, y)) listener.onMusicTap();
+                int key = -1;
+                if (npVisible) for (int i = 0; i < 3; i++) {
+                    RectF k = npKeys[i];
+                    if (x > k.left - 4 && x < k.right + 4 && y > k.top - 6 && y < k.bottom + 6) key = i;
+                }
+                if (key >= 0) {
+                    npPressed = key; npPressAt = System.currentTimeMillis();
+                    npPinUntil = npPressAt + 20_000;   // na bedienen 20 s "nu speelt" vasthouden
+                    listener.onMusicKey(key);
+                    invalidate();
+                }
+                else if (rBand.contains(x, y)) listener.onMusicTap();
                 else if (rTank.contains(x, y)) listener.onTankTap();
                 else if (rSpeed.contains(x, y)) listener.onSpeedTap();
                 performClick();

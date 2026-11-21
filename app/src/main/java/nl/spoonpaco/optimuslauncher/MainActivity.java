@@ -90,6 +90,14 @@ public class MainActivity extends Activity {
         cockpit.listener = new CockpitView.Listener() {
             @Override public void onSpeedTap() { toggleOverlay(); }
             @Override public void onMusicTap() { startActivity(new Intent(MainActivity.this, MusicActivity.class)); }
+            @Override public void onMusicKey(int k) {
+                MusicPlayer mp = MusicPlayer.get(MainActivity.this);
+                if (mp.current() != null && (mp.isPlaying() || !BtMedia.playing)) {
+                    if (k == 0) mp.previous(); else if (k == 1) mp.toggle(); else mp.next();
+                } else BtMedia.control(k);
+                CarLogger.note("muziek: bandknop " + (k == 0 ? "vorige" : k == 1 ? "speel/pauze" : "volgende"));
+                cockpit.postDelayed(MainActivity.this::refreshCockpit, 300);
+            }
             @Override public void onClockLongPress() { startActivity(new Intent(MainActivity.this, DebugActivity.class)); }
             @Override public void onTankTap() { showFuelDialog(); }
         };
@@ -492,13 +500,13 @@ public class MainActivity extends Activity {
         // nu speelt: eigen speler (USB) of telefoon via Bluetooth
         MusicPlayer mpl = MusicPlayer.get(this);
         MusicPlayer.Track nt = mpl.current();
-        if (mpl.isPlaying() && nt != null) {
-            c.npShow = true; c.npSrc = "USB"; c.npTitle = nt.label(); c.npArtist = nt.artist;
+        if (nt != null && (mpl.isPlaying() || !BtMedia.playing)) {
+            c.npShow = true; c.npPlaying = mpl.isPlaying(); c.npSrc = "USB"; c.npTitle = nt.label(); c.npArtist = nt.artist;
             c.npSub = (nt.album.isEmpty() ? "" : nt.album + "   ") + (mpl.queueIndex() + 1) + "/" + mpl.queueSize();
             int du = mpl.durationMs(), po = mpl.positionMs();
             c.npFrac = du > 0 ? po / (float) du : 0; c.npTime = MusicPlayer.time(po); c.npTotal = MusicPlayer.time(du);
         } else if (BtMedia.playing && BtMedia.title != null && !BtMedia.title.isEmpty()) {
-            c.npShow = true; c.npSrc = "BT"; c.npTitle = BtMedia.title; c.npArtist = BtMedia.artist == null ? "" : BtMedia.artist;
+            c.npShow = true; c.npPlaying = true; c.npSrc = "BT"; c.npTitle = BtMedia.title; c.npArtist = BtMedia.artist == null ? "" : BtMedia.artist;
             c.npSub = BtMedia.album == null ? "" : BtMedia.album; c.npFrac = 0; c.npTime = ""; c.npTotal = "";
         } else c.npShow = false;
         if (scanner != null) scanner.update(CarSignals.mcu04 == 1 || mpl.isPlaying(), Math.max(BatteryHealth.level, store.serviceDue(Clock.now()) ? 1 : 0));

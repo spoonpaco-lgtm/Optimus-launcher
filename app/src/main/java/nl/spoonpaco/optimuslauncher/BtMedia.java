@@ -81,4 +81,14 @@ public final class BtMedia {
         return "bluetooth-muziek: " + status + "\n  " + (playing ? "speelt" : "stil")
                 + " | titel=" + title + " | artiest=" + artist + " | album=" + album + "\n";
     }
+
+    /** 0 = vorige, 1 = speel/pauze, 2 = volgende */
+    public static void control(int k) {
+        try {
+            if (controller == null) return;
+            MediaController.TransportControls t = controller.getTransportControls();
+            if (k == 0) t.skipToPrevious(); else if (k == 2) t.skipToNext();
+            else if (playing) t.pause(); else t.play();
+        } catch (Exception ignored) { }
+    }
 }
