@@ -10,6 +10,18 @@ import android.graphics.Shader;
 final class Synthwave {
     private Synthwave() { }
     private static final Paint q = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static float phase;      // positie van het raster (0..1 per lijn)
+    private static long lastT;
+
+    /** Raster schuift mee met de echte snelheid (GPS): 50 km/h = één lijn per 0,9 s; stilstaan = stil. */
+    private static float gridPhase(long t) {
+        float dt = lastT == 0 ? 0 : Math.min(500, t - lastT);
+        lastT = t;
+        boolean fresh = System.currentTimeMillis() - TrackerService.lastFixTime < 5000;
+        float v = fresh ? Math.max(0f, Math.min(160f, TrackerService.speedKmh)) : 0f;
+        phase = (phase + dt * (v / 50f) / 900f) % 1f;
+        return phase;
+    }
 
     /** t = tijd in ms; rijden = raster beweegt (anders stil). */
     static void draw(Canvas c, RectF r, int key, long t, boolean moving) {
@@ -40,7 +52,7 @@ final class Synthwave {
         // lijnen naar het verdwijnpunt
         for (int i = 0; i <= 10; i++) c.drawLine(cx, hor, r.left - r.width() * 0.4f + i * r.width() * 1.8f / 10f, r.bottom, q);
         // dwarslijnen die naar je toe komen (perspectief)
-        float f = moving ? (t % 900) / 900f : 0f;
+        float f = gridPhase(t);
         for (int i = 0; i < 9; i++) {
             float k = (i + f) / 9f;                       // 0 = horizon, 1 = onderrand
             float y = hor + (r.bottom - hor) * k * k;
