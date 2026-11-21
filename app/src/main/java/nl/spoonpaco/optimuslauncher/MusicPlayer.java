@@ -35,8 +35,10 @@ import java.util.Random;
  */
 public final class MusicPlayer {
     public static final class Track {
-        public String path, title, artist = "", album = "", genre = "", folder;
-        public int dur, no;
+        public String path, title, artist = "", album = "", genre = "", folder, albumArtist = "";
+        public int dur, no, disc;
+        /** Artiest voor de indeling: album artist als die er is (verzamelalbums blijven heel), anders artiest. */
+        public String groupArtist() { return albumArtist.isEmpty() ? artist : albumArtist; }
         public String label() { return title != null && !title.isEmpty() ? title : new File(path).getName().replaceAll("\\.[^.]+$", ""); }
     }
 
@@ -58,6 +60,8 @@ public final class MusicPlayer {
     private List<Track> order = new ArrayList<>(); // afspeelvolgorde (geschud of niet)
     private int pos = -1;
     public boolean shuffle = false;
+    /** 0 = uit, 1 = hele wachtrij, 2 = dit nummer. */
+    public int repeat = 0;
     private MediaPlayer mp;
     private boolean prepared = false, wantPlay = false, pausedByFocus = false;
     private MediaSession session;
@@ -66,6 +70,7 @@ public final class MusicPlayer {
     private MusicPlayer(Context c) {
         ctx = c;
         shuffle = c.getSharedPreferences("music", Context.MODE_PRIVATE).getBoolean("shuffle", false);
+        repeat = c.getSharedPreferences("music", Context.MODE_PRIVATE).getInt("repeat", 0);
     }
 
     public void addListener(Listener l) { if (!listeners.contains(l)) listeners.add(l); }
@@ -96,10 +101,14 @@ public final class MusicPlayer {
                     t.folder = f.getParentFile() == null ? "" : f.getParentFile().getName();
                     String key = t.path + "|" + f.length();
                     JSONObject o = idx.get(key);
-                    if (o != null && !o.has("g")) {
-                        // oud index-item zonder genre: alleen genre bijlezen
-                        try { mmr.setDataSource(t.path); o.put("g", genre(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE))); }
-                        catch (Exception ignored) { try { o.put("g", ""); } catch (Exception ignored2) { } }
+                    if (o != null && (!o.has("g") || !o.has("aa"))) {
+                        // oud index-item: genre / album artist / disc bijlezen
+                        try {
+                            mmr.setDataSource(t.path);
+                            o.put("g", genre(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)));
+                            o.put("aa", nz(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)));
+                            o.put("dn", parse(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)));
+                        } catch (Exception ignored) { try { o.put("g", o.optString("g")); o.put("aa", ""); o.put("dn", 0); } catch (Exception ignored2) { } }
                     }
                     if (o == null) {
                         o = new JSONObject();
@@ -111,11 +120,20 @@ public final class MusicPlayer {
                             o.put("d", parse(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)));
                             o.put("n", parse(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)));
                             o.put("g", genre(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)));
+                            o.put("aa", nz(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)));
+                            o.put("dn", parse(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)));
                         } catch (Exception ignored) { }
                         idx.put(key, o);
                     }
                     t.title = o.optString("t"); t.artist = o.optString("a"); t.album = o.optString("b"); t.genre = o.optString("g");
                     t.dur = o.optInt("d"); t.no = o.optInt("n");
+                    t.albumArtist = o.optString("aa"); t.disc = o.optInt("dn");
+                    // fallback zonder tags: map = album, map daarboven = artiest (Artiest/Album/nummer.mp3)
+                    File par = f.getParentFile();
+                    if (t.album.isEmpty() && par != null && r != null && !par.equals(r)) t.album = par.getName();
+                    if (t.artist.isEmpty() && t.albumArtist.isEmpty() && par != null && par.getParentFile() != null
+                            && r != null && !par.equals(r) && !par.getParentFile().equals(r)) t.artist = par.getParentFile().getName();
+                    if (t.no <= 0) t.no = leadingNumber(f.getName());
                     out.add(t);
                     if (++indexed % 25 == 0) changed();
                 }
@@ -139,7 +157,7 @@ public final class MusicPlayer {
         try { int k = s.indexOf('/'); return Integer.parseInt((k > 0 ? s.substring(0, k) : s).trim()); } catch (Exception e) { return 0; }
     }
 
-    private File findRoot() {
+    File findRoot() {
         // 1) app-map op een verwisselbare opslag -> wortel van die stick
         File[] ext = ctx.getExternalFilesDirs(null);
         if (ext != null) for (int i = 1; i < ext.length; i++) {
@@ -195,6 +213,60 @@ public final class MusicPlayer {
             out.write(o.toString().getBytes("UTF-8"));
         } catch (Exception ignored) { }
     }
+
+    /** "03 - Titel.mp3" -> 3 (tracknummer uit de bestandsnaam als de tag ontbreekt). */
+    static int leadingNumber(String name) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d{1,3})[\\s._-]").matcher(name);
+        return m.find() ? Integer.parseInt(m.group(1)) : 0;
+    }
+
+    // ---------------------------------------------------------------- slim sorteren
+
+    /** Sorteersleutel: hoofdletters tellen niet, "The " vooraan telt niet mee (The Beatles bij de B). */
+    public static String sortKey(String s) {
+        if (s == null) return "";
+        String k = s.trim().toLowerCase(java.util.Locale.ROOT);
+        if (k.startsWith("the ")) k = k.substring(4);
+        return k;
+    }
+
+    /** Natuurlijke vergelijking: "track 2" voor "track 10". */
+    public static int natural(String a, String b) {
+        int i = 0, j = 0, na = a.length(), nb = b.length();
+        while (i < na && j < nb) {
+            char ca = a.charAt(i), cb = b.charAt(j);
+            if (Character.isDigit(ca) && Character.isDigit(cb)) {
+                int si = i, sj = j;
+                while (i < na && Character.isDigit(a.charAt(i))) i++;
+                while (j < nb && Character.isDigit(b.charAt(j))) j++;
+                String da = a.substring(si, i).replaceFirst("^0+(?=.)", ""), db = b.substring(sj, j).replaceFirst("^0+(?=.)", "");
+                if (da.length() != db.length()) return da.length() - db.length();
+                int c = da.compareTo(db);
+                if (c != 0) return c;
+            } else {
+                if (ca != cb) return Character.compare(ca, cb);
+                i++; j++;
+            }
+        }
+        return (na - i) - (nb - j);
+    }
+
+    /** Vergelijker voor namen (artiesten, albums, genres, mappen). */
+    public static final java.util.Comparator<String> SMART = (a, b) -> {
+        int c = natural(sortKey(a), sortKey(b));
+        return c != 0 ? c : a.compareTo(b);
+    };
+
+    /** Volgorde binnen een album: disc, tracknummer, dan natuurlijk op bestandsnaam. */
+    public static final java.util.Comparator<Track> ALBUM_ORDER = (a, b) -> {
+        int c = SMART.compare(a.album, b.album);
+        if (c != 0) return c;
+        int da = a.disc > 0 ? a.disc : 1, db = b.disc > 0 ? b.disc : 1;
+        if (da != db) return Integer.compare(da, db);
+        int na = a.no > 0 ? a.no : Integer.MAX_VALUE, nb = b.no > 0 ? b.no : Integer.MAX_VALUE;
+        if (na != nb) return Integer.compare(na, nb);
+        return natural(a.path.toLowerCase(java.util.Locale.ROOT), b.path.toLowerCase(java.util.Locale.ROOT));
+    };
 
     /** ID3v1-genrenummers zoals "(17)" of "17" omzetten naar een naam; meerdere genres: eerste. */
     private static final String[] ID3 = {"Blues","Classic Rock","Country","Dance","Disco","Funk","Grunge","Hip-Hop","Jazz","Metal",
@@ -288,10 +360,60 @@ public final class MusicPlayer {
     private void rebuildOrder(Track first) {
         order = new ArrayList<>(queue);
         if (shuffle) {
+            // hele wachtrij één keer schudden (Fisher-Yates); de originele volgorde blijft in 'queue'
             Collections.shuffle(order, new Random());
             if (first != null) { order.remove(first); order.add(0, first); }
+            spreadArtists(order);
             pos = 0;
         } else pos = Math.max(0, order.indexOf(first));
+    }
+
+    /** Zelfde artiest niet direct na elkaar: ruil met een verderop staand nummer van een andere artiest. */
+    private static void spreadArtists(List<Track> l) {
+        for (int i = 1; i < l.size(); i++) {
+            String prev = l.get(i - 1).groupArtist();
+            if (!l.get(i).groupArtist().equalsIgnoreCase(prev) || prev.isEmpty()) continue;
+            for (int j = i + 1; j < l.size(); j++) {
+                String cand = l.get(j).groupArtist();
+                boolean okHere = !cand.equalsIgnoreCase(prev) && (i + 1 >= l.size() || !cand.equalsIgnoreCase(l.get(i + 1).groupArtist()) || j == i + 1);
+                if (okHere) { Collections.swap(l, i, j); break; }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- favorieten (afspeellijst)
+
+    private java.util.LinkedHashSet<String> favs;
+
+    private java.util.LinkedHashSet<String> favSet() {
+        if (favs == null) {
+            favs = new java.util.LinkedHashSet<>();
+            try {
+                JSONArray a = new JSONArray(ctx.getSharedPreferences("music", Context.MODE_PRIVATE).getString("favs", "[]"));
+                for (int i = 0; i < a.length(); i++) favs.add(a.optString(i));
+            } catch (Exception ignored) { }
+        }
+        return favs;
+    }
+
+    public boolean isFav(Track t) { return t != null && favSet().contains(t.path); }
+
+    public void toggleFav(Track t) {
+        if (t == null) return;
+        if (!favSet().remove(t.path)) favSet().add(t.path);
+        JSONArray a = new JSONArray();
+        for (String p : favSet()) a.put(p);
+        ctx.getSharedPreferences("music", Context.MODE_PRIVATE).edit().putString("favs", a.toString()).apply();
+        changed();
+    }
+
+    /** Favorieten in de volgorde waarin ze zijn toegevoegd (alleen nummers die op de stick staan). */
+    public List<Track> favorites() {
+        Map<String, Track> by = new HashMap<>();
+        for (Track t : all()) by.put(t.path, t);
+        List<Track> out = new ArrayList<>();
+        for (String p : favSet()) { Track t = by.get(p); if (t != null) out.add(t); }
+        return out;
     }
 
     public void setShuffle(boolean on) {
@@ -338,6 +460,21 @@ public final class MusicPlayer {
         updateSession(); changed();
     }
 
+    public void cycleRepeat() {
+        repeat = (repeat + 1) % 3;
+        ctx.getSharedPreferences("music", Context.MODE_PRIVATE).edit().putInt("repeat", repeat).apply();
+        changed();
+    }
+
+    /** Nummer is afgelopen: herhaal / volgende / stoppen aan het eind. */
+    private void finished() {
+        if (order.isEmpty()) return;
+        if (repeat == 2) { startCurrent(); return; }
+        if (pos + 1 < order.size()) { pos++; startCurrent(); return; }
+        if (repeat == 1) { pos = 0; startCurrent(); return; }
+        wantPlay = false; updateSession(); saveState(false); changed();   // einde van de wachtrij
+    }
+
     public void next() {
         if (order.isEmpty()) return;
         pos = (pos + 1) % order.size();
@@ -367,7 +504,7 @@ public final class MusicPlayer {
                 if (wantPlay) m.start();
                 updateSession(); changed(); saveState();
             });
-            mp.setOnCompletionListener(m -> next());
+            mp.setOnCompletionListener(m -> finished());
             mp.setOnErrorListener((m, w, x) -> { CarLogger.note("muziek: kan niet afspelen " + t.path); h.postDelayed(this::next, 500); return true; });
             mp.prepareAsync();
             CarLogger.note("muziek: speelt " + t.label() + " - " + t.artist);

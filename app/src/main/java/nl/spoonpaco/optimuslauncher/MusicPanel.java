@@ -35,7 +35,7 @@ public class MusicPanel extends View {
     private float s = 1f, H = 650f;
     private int mode = 1;               // 0 mappen, 1 artiesten, 2 albums, 3 genres
     private final List<String> path = new ArrayList<>();   // gekozen groepen, bv. [artiest, album]
-    private boolean searching = false;
+    private boolean searching = false, favView = false;
     private final StringBuilder query = new StringBuilder();
     private float scroll = 0, downY, lastY; private boolean dragging;
     private final List<Object[]> hits = new ArrayList<>();
@@ -117,7 +117,7 @@ public class MusicPanel extends View {
             final int m = i;
             RectF r = new RectF(18 + i * (tw + 8), 70, 18 + i * (tw + 8) + tw, 118);
             pt.uiButton(c, r, tabs[i], mode == i && !searching, key, 11);
-            hit(r, () -> { mode = m; path.clear(); searching = false; scroll = 0; });
+            hit(r, () -> { mode = m; path.clear(); searching = false; favView = false; scroll = 0; });
         }
         drawList(c, key);
 
@@ -189,15 +189,22 @@ public class MusicPanel extends View {
         final RectF scf = new RectF(sc);
         hit(scf, () -> mp.seekFraction((upX - scf.left - 12) / (scf.width() - 24)));
 
-        // knoppen
-        float bw = (nr - X - 48) / 4f, by = 300;
-        RectF b1 = new RectF(X, by + 12, X + bw, by + 74), b2 = new RectF(X + bw + 16, by + 12, X + 2 * bw + 16, by + 74),
-                b3 = new RectF(X + 2 * bw + 32, by + 12, X + 3 * bw + 32, by + 74), b4 = new RectF(X + 3 * bw + 48, by + 12, nr, by + 74);
+        // knoppen: vorige / speel-pauze / volgende als iconen, dan shuffle / herhaal / favoriet met lampje
+        float by = 300, kw2 = 92, gap2 = 10;
         boolean playing = mp.isPlaying();
-        pt.uiButton(c, b1, Lang.t("VORIGE", "PREV"), false, key, 15); hit(b1, mp::previous);
-        pt.uiButton(c, b2, playing ? Lang.t("PAUZE", "PAUSE") : Lang.t("SPEEL", "PLAY"), playing, key, 15); hit(b2, mp::toggle);
-        pt.uiButton(c, b3, Lang.t("VOLGENDE", "NEXT"), false, key, 15); hit(b3, mp::next);
-        pt.uiButton(c, b4, "SHUFFLE", mp.shuffle, GRN, 15); hit(b4, () -> mp.setShuffle(!mp.shuffle));
+        RectF k1 = new RectF(X, by + 12, X + kw2, by + 74), k2 = new RectF(k1.right + gap2, by + 12, k1.right + gap2 + kw2, by + 74),
+                k3 = new RectF(k2.right + gap2, by + 12, k2.right + gap2 + kw2, by + 74);
+        pt.uiMusicKey(c, k1, 0, false, playing); hit(k1, mp::previous);
+        pt.uiMusicKey(c, k2, 1, false, playing); hit(k2, mp::toggle);
+        pt.uiMusicKey(c, k3, 2, false, playing); hit(k3, mp::next);
+        float tw3 = (nr - k3.right - 3 * gap2) / 3f;
+        RectF b4 = new RectF(k3.right + gap2, by + 12, k3.right + gap2 + tw3, by + 74);
+        RectF b5 = new RectF(b4.right + gap2, by + 12, b4.right + gap2 + tw3, by + 74);
+        RectF b6 = new RectF(b5.right + gap2, by + 12, nr, by + 74);
+        pt.uiButton(c, b4, "SHUFFLE", mp.shuffle, GRN, 12); hit(b4, () -> mp.setShuffle(!mp.shuffle));
+        String rep = mp.repeat == 2 ? Lang.t("HERHAAL 1", "REPEAT 1") : Lang.t("HERHAAL", "REPEAT");
+        pt.uiButton(c, b5, rep, mp.repeat != 0, GRN, 12); hit(b5, mp::cycleRepeat);
+        pt.uiButton(c, b6, Lang.t("FAVORIET", "FAVOURITE"), mp.isFav(t), key, 12); hit(b6, () -> mp.toggleFav(mp.current()));
 
         // hierna
         pt.uiText(c, Lang.t("HIERNA", "UP NEXT"), X, by + 108, 13, dim(AMB), Paint.Align.LEFT);
@@ -237,6 +244,14 @@ public class MusicPanel extends View {
             pt.uiButton(c, rs, Lang.t("STICK OPNIEUW LEZEN", "RESCAN STICK"), false, key, 13);
             hit(rs, mp::scan);
         }
+        RectF vb = new RectF(X + 540, H - 70, 1216, H - 20);
+        pt.uiButton(c, vb, "VIDEO", false, key, 15);
+        hit(vb, () -> {
+            android.content.Intent in = new android.content.Intent(getContext(), VideoActivity.class);
+            in.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(in);
+            if (floating) host.close();
+        });
     }
 
     /** Indeling per tabblad: welke niveaus je doorklikt voordat je bij de nummers komt. */
@@ -252,7 +267,7 @@ public class MusicPanel extends View {
     private String keyOf(MusicPlayer.Track t, int lvl) {
         switch (lvl) {
             case 0: return t.folder;
-            case 1: return t.artist.isEmpty() ? Lang.t("ONBEKENDE ARTIEST", "UNKNOWN ARTIST") : t.artist;
+            case 1: return t.groupArtist().isEmpty() ? Lang.t("ONBEKENDE ARTIEST", "UNKNOWN ARTIST") : t.groupArtist();
             case 2: return t.album.isEmpty() ? Lang.t("ONBEKEND ALBUM", "UNKNOWN ALBUM") : t.album;
             default: return t.genre.isEmpty() ? Lang.t("GEEN GENRE", "NO GENRE") : t.genre;
         }
@@ -261,13 +276,9 @@ public class MusicPanel extends View {
     private String count(int n) { return n + (n == 1 ? Lang.t(" NUMMER", " TRACK") : Lang.t(" NUMMERS", " TRACKS")); }
 
     private void sortTracks(List<MusicPlayer.Track> l) {
-        java.util.Collections.sort(l, (a, b) -> {
-            int c = a.album.compareToIgnoreCase(b.album);
-            if (c != 0) return c;
-            // tracknummer; zonder nummer (0) achteraan — consistente volgorde, anders crasht TimSort
-            int na = a.no > 0 ? a.no : Integer.MAX_VALUE, nb = b.no > 0 ? b.no : Integer.MAX_VALUE;
-            if (na != nb) return Integer.compare(na, nb);
-            return a.path.compareToIgnoreCase(b.path);
+        java.util.Collections.sort(l, (x, y) -> {
+            int c = MusicPlayer.SMART.compare(x.groupArtist(), y.groupArtist());
+            return c != 0 && mode != 2 ? c : MusicPlayer.ALBUM_ORDER.compare(x, y);
         });
     }
 
@@ -275,6 +286,17 @@ public class MusicPanel extends View {
         List<Object[]> rows = new ArrayList<>(); // {label, sub, runnable, isPlayingRow}
         MusicPlayer.Track cur = mp.current();
         if (searching) { searchRows(rows, cur); }
+        else if (favView) {
+            final List<MusicPlayer.Track> fl = mp.favorites();
+            rows.add(new Object[]{"< " + Lang.t("TERUG", "BACK"), Lang.t("FAVORIETEN", "FAVOURITES"), (Runnable) () -> { favView = false; scroll = 0; }, false});
+            if (!fl.isEmpty()) rows.add(new Object[]{Lang.t("ALLE FAVORIETEN AFSPELEN", "PLAY ALL FAVOURITES"), count(fl.size()), (Runnable) () -> mp.play(fl, 0), false});
+            for (int i = 0; i < fl.size(); i++) {
+                final int idx = i;
+                MusicPlayer.Track t = fl.get(i);
+                rows.add(new Object[]{t.label(), (t.groupArtist().isEmpty() ? "" : t.groupArtist() + "  ") + (t.dur > 0 ? MusicPlayer.time(t.dur) : ""),
+                        (Runnable) () -> mp.play(fl, idx), t == cur});
+            }
+        }
         else {
             int[] lv = levels();
             List<MusicPlayer.Track> set = new ArrayList<>();
@@ -292,8 +314,12 @@ public class MusicPanel extends View {
                 sortTracks(playAll);
                 if (!playAll.isEmpty()) rows.add(new Object[]{path.isEmpty() ? Lang.t("ALLES AFSPELEN", "PLAY ALL") : Lang.t("ALLES VAN ", "ALL OF ") + path.get(path.size() - 1),
                         count(playAll.size()), (Runnable) () -> mp.play(playAll, 0), false});
+                if (path.isEmpty()) {
+                    int nf = mp.favorites().size();
+                    if (nf > 0) rows.add(new Object[]{Lang.t("FAVORIETEN", "FAVOURITES"), count(nf), (Runnable) () -> { favView = true; scroll = 0; }, false});
+                }
                 int lvl = lv[path.size()];
-                java.util.TreeMap<String, List<MusicPlayer.Track>> g = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+                java.util.TreeMap<String, List<MusicPlayer.Track>> g = new java.util.TreeMap<>(MusicPlayer.SMART);
                 for (MusicPlayer.Track t : set) {
                     String k = keyOf(t, lvl);
                     List<MusicPlayer.Track> l = g.get(k);
@@ -405,12 +431,13 @@ public class MusicPanel extends View {
     private void searchRows(List<Object[]> rows, MusicPlayer.Track cur) {
         String q = query.toString().trim().toLowerCase(Locale.ROOT);
         if (q.isEmpty()) return;
-        java.util.TreeMap<String, Integer> artists = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER), albums = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        java.util.TreeMap<String, Integer> artists = new java.util.TreeMap<>(MusicPlayer.SMART), albums = new java.util.TreeMap<>(MusicPlayer.SMART);
         java.util.Map<String, String> albumArtist = new java.util.HashMap<>();
         final List<MusicPlayer.Track> tracks = new ArrayList<>();
         for (MusicPlayer.Track t : mp.all()) {
-            if (!t.artist.isEmpty() && t.artist.toLowerCase(Locale.ROOT).contains(q)) artists.merge(t.artist, 1, Integer::sum);
-            if (!t.album.isEmpty() && t.album.toLowerCase(Locale.ROOT).contains(q)) { albums.merge(t.album, 1, Integer::sum); albumArtist.put(t.album, t.artist); }
+            String ga = t.groupArtist();
+            if (!ga.isEmpty() && (ga.toLowerCase(Locale.ROOT).contains(q) || t.artist.toLowerCase(Locale.ROOT).contains(q))) artists.merge(ga, 1, Integer::sum);
+            if (!t.album.isEmpty() && t.album.toLowerCase(Locale.ROOT).contains(q)) { albums.merge(t.album, 1, Integer::sum); albumArtist.put(t.album, t.groupArtist()); }
             if (t.label().toLowerCase(Locale.ROOT).contains(q) && tracks.size() < 40) tracks.add(t);
         }
         int n = 0;

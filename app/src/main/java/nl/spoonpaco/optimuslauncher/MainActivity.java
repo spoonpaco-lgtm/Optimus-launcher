@@ -901,6 +901,7 @@ public class MainActivity extends Activity {
                     case "triplog": startActivity(new Intent(this, TripLogActivity.class)); break;
                     case "debug": startActivity(new Intent(this, DebugActivity.class)); break;
                     case "music": startActivity(new Intent(this, MusicActivity.class)); break;
+                    case "video": startActivity(new Intent(this, VideoActivity.class)); break;
                     case "fuel": showFuelDialog(); break;
                     case "maintenance": Dialogs.maintenance(this, store, () -> { if (menuView != null) menuView.invalidate(); }); break;
                     case "highscores": Dialogs.highscores(this, theme); break;
