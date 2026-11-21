@@ -835,6 +835,24 @@ public class CockpitView extends View {
         }
     }
 
+    /** Toets zonder lampje (toetsenblok): chromen rand, grote tekst in het midden; down = ingedrukt. */
+    public void uiKey(Canvas c, RectF r, String label, boolean down, int key, float size) {
+        glow.setColor(0xCC000000);
+        glow.setMaskFilter(new BlurMaskFilter(8, BlurMaskFilter.Blur.NORMAL));
+        if (!down) c.drawRoundRect(r.left + 1, r.top + 5, r.right - 1, r.bottom + 4, 7, 7, glow);
+        glow.setMaskFilter(null);
+        p.setShader(new LinearGradient(0, r.top, 0, r.bottom, 0xFF8C8C96, 0xFF2E2E36, Shader.TileMode.CLAMP));
+        c.drawRoundRect(r.left - 1.5f, r.top - 1.5f, r.right + 1.5f, r.bottom + 1.5f, 8, 8, p);
+        p.setShader(new LinearGradient(0, r.top, 0, r.bottom, down ? 0xFF0D0D10 : 0xFF26262D, down ? 0xFF1C1C22 : 0xFF0D0D10, Shader.TileMode.CLAMP));
+        c.drawRoundRect(r, 7, 7, p);
+        p.setShader(null);
+        p.setColor(0x22FFFFFF);
+        c.drawRect(r.left + 8, r.top + 1, r.right - 8, r.top + 2, p);
+        p.setTextAlign(Paint.Align.CENTER);
+        text(c, label, r.centerX(), r.centerY() + size * 0.36f + (down ? 1 : 0), size, down ? key : dark(key, 0.85f));
+        p.setTextAlign(Paint.Align.LEFT);
+    }
+
     /** Tabblad: titel + ondertitel; gekozen = display met scanlines en brandend lampje. */
     public void uiTab(Canvas c, RectF r, String title, String sub, boolean on, int key) {
         if (on && !leds) {

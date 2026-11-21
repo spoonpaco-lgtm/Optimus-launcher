@@ -25,38 +25,25 @@ public final class Dialogs {
     private static EditText focused;
 
     public static void maintenance(final Activity a, final Store store, final Runnable done) {
-        float d = a.getResources().getDisplayMetrics().density;
-        LinearLayout box = new LinearLayout(a);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding((int) (16 * d), (int) (8 * d), (int) (16 * d), 0);
         SimpleDateFormat df = new SimpleDateFormat("dd-MM-yyyy", Locale.US);
-        final EditText odo = field(a, Lang.t("Kilometerstand nu", "Odometer now"), store.odometer() > 0 ? String.valueOf(store.odometer()) : "");
-        final EditText oilKm = field(a, Lang.t("Km-stand bij laatste olie", "Odometer at last oil change"), store.oilKm() > 0 ? String.valueOf(store.oilKm()) : "");
-        final EditText oilDate = field(a, Lang.t("Datum laatste olie (dd-mm-jjjj)", "Date of last oil change (dd-mm-yyyy)"), store.oilDate() > 0 ? df.format(new Date(store.oilDate())) : "");
-        final EditText apk = field(a, Lang.t("APK verloopt op (dd-mm-jjjj)", "MOT due (dd-mm-yyyy)"), store.apkDate() > 0 ? df.format(new Date(store.apkDate())) : "");
-        LinearLayout row = new LinearLayout(a);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout fields = new LinearLayout(a);
-        fields.setOrientation(LinearLayout.VERTICAL);
-        fields.addView(odo); fields.addView(oilKm); fields.addView(oilDate); fields.addView(apk);
-        row.addView(fields, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        row.addView(keypad(a), new LinearLayout.LayoutParams((int) (240 * d), ViewGroup.LayoutParams.WRAP_CONTENT));
-        box.addView(row);
-        focused = odo; odo.requestFocus();
-        new AlertDialog.Builder(a, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(Lang.t("Onderhoud", "Service"))
-                .setView(box)
-                .setPositiveButton(Lang.t("Opslaan", "Save"), (dd, w) -> {
-                    int o = num(odo), ok = num(oilKm);
-                    long od = date(oilDate), ad = date(apk);
+        InputForm.Field[] f = {
+                new InputForm.Field(Lang.t("KILOMETERSTAND NU", "ODOMETER NOW"), store.odometer() > 0 ? String.valueOf(store.odometer()) : "", "km", false),
+                new InputForm.Field(Lang.t("KM-STAND BIJ LAATSTE OLIE", "ODOMETER AT LAST OIL CHANGE"), store.oilKm() > 0 ? String.valueOf(store.oilKm()) : "", "km", false),
+                new InputForm.Field(Lang.t("DATUM LAATSTE OLIE", "DATE OF LAST OIL CHANGE"), store.oilDate() > 0 ? df.format(new Date(store.oilDate())) : "", Lang.t("dd-mm-jjjj", "dd-mm-yyyy"), true),
+                new InputForm.Field(Lang.t("APK VERLOOPT OP", "MOT DUE"), store.apkDate() > 0 ? df.format(new Date(store.apkDate())) : "", Lang.t("dd-mm-jjjj", "dd-mm-yyyy"), true)};
+        InputForm.show(a, Lang.t("ONDERHOUD", "SERVICE"), Lang.t("TIK OP EEN VELD OM HET TE WIJZIGEN", "TAP A FIELD TO CHANGE IT"), f, null, false, Lang.t("WIS", "CLR"),
+                (v, t) -> {
+                    int o = num(v[0]), ok = num(v[1]);
+                    long od = date(v[2]), ad = date(v[3]);
+                    if (!v[2].isEmpty() && od <= 0) return Lang.t("DATUM OLIE KLOPT NIET (dd-mm-jjjj)", "OIL DATE IS INVALID (dd-mm-yyyy)");
+                    if (!v[3].isEmpty() && ad <= 0) return Lang.t("APK-DATUM KLOPT NIET (dd-mm-jjjj)", "MOT DATE IS INVALID (dd-mm-yyyy)");
                     if (o > 0) store.setOdometer(o);
                     if (ok > 0 || od > 0) store.setOil(ok > 0 ? ok : store.oilKm(), od > 0 ? od : store.oilDate());
                     if (ad > 0) store.setApk(ad);
                     WorkLog.write(a);
                     if (done != null) done.run();
-                })
-                .setNegativeButton(Lang.t("Annuleren", "Cancel"), null)
-                .show();
+                    return null;
+                });
     }
 
     private static EditText field(Activity a, String hint, String val) {
@@ -105,12 +92,18 @@ public final class Dialogs {
         try { return Integer.parseInt(e.getText().toString().replace("-", "").trim()); } catch (Exception x) { return -1; }
     }
 
-    private static long date(EditText e) {
+    private static int num(String s) {
+        try { return Integer.parseInt(s.replace("-", "").trim()); } catch (Exception x) { return -1; }
+    }
+    private static long date(EditText e) { return date(e.getText().toString()); }
+    private static long date(String s) {
         try {
-            String[] p = e.getText().toString().trim().split("-");
+            String[] p = s.trim().split("-");
+            int dd = Integer.parseInt(p[0]), mm = Integer.parseInt(p[1]), yy = Integer.parseInt(p[2]);
+            if (dd < 1 || dd > 31 || mm < 1 || mm > 12 || yy < 2000 || yy > 2100) return 0L;
             Calendar c = Calendar.getInstance();
             c.clear();
-            c.set(Integer.parseInt(p[2]), Integer.parseInt(p[1]) - 1, Integer.parseInt(p[0]), 12, 0);
+            c.set(yy, mm - 1, dd, 12, 0);
             return c.getTimeInMillis();
         } catch (Exception x) { return 0L; }
     }

@@ -767,48 +767,23 @@ public class MainActivity extends Activity {
     }
 
     private void showFuelDialog() {
-        int pad = (int) (20 * getResources().getDisplayMetrics().density);
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(pad, pad / 2, pad, 0);
-
-        final EditText liters = numberField(Lang.t("Liters getankt", "Litres filled"));
-        final EditText price = numberField(Lang.t("Prijs per liter (€)", "Price per litre (€)"));
-        if (store.price() > 0) price.setText(String.format(java.util.Locale.US, "%.3f", store.price()));
-        price.setOnClickListener(v -> { price.setText(""); });
-        final CheckBox full = new CheckBox(this);
-        full.setText(Lang.t("Tank is nu vol (57 l)", "Tank is now full (57 L)"));
-        full.setTextSize(15);
-
-        LinearLayout fields = new LinearLayout(this);
-        fields.setOrientation(LinearLayout.VERTICAL);
-        fields.addView(liters);
-        fields.addView(price);
-        fields.addView(full);
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.addView(fields, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        row.addView(keypad(liters, price), new LinearLayout.LayoutParams((int) (230 * getResources().getDisplayMetrics().density), LinearLayout.LayoutParams.WRAP_CONTENT));
-        box.addView(row);
-
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(Lang.t("Tanken", "Refuel"))
-                .setView(box)
-                .setPositiveButton(Lang.t("Opslaan", "Save"), new DialogInterface.OnClickListener() {
-                    @Override public void onClick(DialogInterface d, int w) {
-                        float l = parse(liters.getText().toString());
-                        float pr = parse(price.getText().toString());
-                        if (!full.isChecked() && l <= 0) {
-                            toast(Lang.t("Vul liters in, of vink 'vol' aan", "Enter litres, or tick 'full'"));
-                            return;
-                        }
-                        store.fill(Math.max(0f, l), pr, full.isChecked());
-                        toast(full.isChecked() ? Lang.t("Tank vol opgeslagen", "Full tank saved") : Lang.t("Tankbeurt opgeslagen", "Refuel saved"));
-                        refresh();
-                    }
-                })
-                .setNegativeButton(Lang.t("Annuleren", "Cancel"), null)
-                .show();
+        String pr = store.price() > 0 ? String.format(java.util.Locale.US, "%.3f", store.price()) : "";
+        InputForm.Field[] f = {
+                new InputForm.Field(Lang.t("LITERS GETANKT", "LITRES FILLED"), "", Lang.t("bv. 39.94", "e.g. 39.94"), false),
+                new InputForm.Field(Lang.t("PRIJS PER LITER (€)", "PRICE PER LITRE (€)"), pr, Lang.t("bv. 2.089", "e.g. 2.089"), false)};
+        float t = store.tankLiters();
+        String sub = t >= 0 ? String.format(java.util.Locale.US, Lang.t("TANK NU ~%.0f VAN 57 L", "TANK NOW ~%.0f OF 57 L"), t) : "";
+        InputForm.show(this, Lang.t("TANKEN", "REFUEL"), sub, f, Lang.t("TANK IS NU VOL (57 L)", "TANK IS NOW FULL (57 L)"), false, ".",
+                (v, full) -> {
+                    float l = parse(v[0]), p = parse(v[1]);
+                    if (!full && l <= 0) return Lang.t("VUL LITERS IN, OF ZET 'VOL' AAN", "ENTER LITRES, OR SWITCH 'FULL' ON");
+                    if (l > 80) return Lang.t("MEER DAN 80 LITER? CONTROLEER DE INVOER", "MORE THAN 80 LITRES? CHECK THE INPUT");
+                    store.fill(Math.max(0f, l), p, full);
+                    CarLogger.note(String.format(java.util.Locale.US, "tanken: %.2f l, %.3f EUR/l, vol=%b", l, p, full));
+                    toast(full ? Lang.t("Tank vol opgeslagen", "Full tank saved") : Lang.t("Tankbeurt opgeslagen", "Refuel saved"));
+                    refresh();
+                    return null;
+                });
     }
 
     private EditText numberField(String hint) {
@@ -887,6 +862,9 @@ public class MainActivity extends Activity {
 
     /** Laatst gemaakte MainActivity (voor de afstandsbediening). */
     static MainActivity instance;
+
+    /** Huidig thema (voor vensters buiten de launcher-activity). */
+    static Theme currentTheme() { return instance != null ? instance.theme : Theme.LED; }
 
     /** Intent van de afstandsbediening (of oude extra "menuTab") afhandelen. */
     private void handleMenuExtra(Intent i) {
