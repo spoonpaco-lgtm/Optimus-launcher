@@ -36,6 +36,7 @@ public class MenuView extends View {
         boolean startAA();
         boolean overlay();
         default boolean musicResume() { return true; }
+        default void speakerTest() { }
         default void setMusicResume(boolean on) { }
         String version();
         String status();
@@ -362,5 +363,7 @@ public class MenuView extends View {
         float y = w.top + 34;
         for (String l : lines) { pt.uiText(c, l, w.left + 20, y, 12, pt.uiGrn(), Paint.Align.LEFT); y += 30; }
         pt.uiGlass(c, w);
+        label(c, "SPEAKERTEST", x0, w.bottom + 40, AMB);
+        button(c, x0, w.bottom + 54, x0 + bw, w.bottom + 114, Lang.t("LINKS / RECHTS", "LEFT / RIGHT"), false, host::speakerTest);
     }
 }
