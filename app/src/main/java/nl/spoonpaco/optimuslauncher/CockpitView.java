@@ -37,7 +37,6 @@ public class CockpitView extends View {
     private long npPinUntil, npPressAt;
     private int npPressed = -1;
     private boolean npVisible;
-    private final RectF[] npKeys = { new RectF(), new RectF(), new RectF() };
     private final RectF rBand = new RectF(310, 0, 1064, 62);
 
     // ---- live waarden (gezet door MainActivity) ----
@@ -90,6 +89,19 @@ public class CockpitView extends View {
     private final RectF rSpeed = new RectF(), rClock = new RectF(), rTank = new RectF();
     private final Runnable longPress = () -> { if (listener != null) listener.onClockLongPress(); downInClock = false; };
     private boolean downInClock;
+    private boolean bandDown, bandLongFired;
+    private float bDownX;
+    private final Runnable bandLong = () -> { bandLongFired = true; musicKey(1); };
+
+    private void musicKey(int k) {
+        if (listener == null) return;
+        npPressed = k; npPressAt = System.currentTimeMillis();
+        npPinUntil = npPressAt + 20_000;   // na bedienen 20 s "nu speelt" vasthouden
+        if (k == 1) npPlaying = !npPlaying;  // meteen tonen, refresh volgt
+        listener.onMusicKey(k);
+        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+        invalidate();
+    }
 
     // layout (design units)
     private float H;   // hoogte in design units
@@ -348,13 +360,11 @@ public class CockpitView extends View {
         window(c, r, tAmb, eAmb);
         lampAt(c, r.left + 20, r.centerY(), 7, GRN, npPlaying);
         text(c, npSrc, r.left + 34, r.centerY() + 4, 10, GRN);
-        // knoppen achter de tekst: vorige / speel-pauze / volgende
-        float kw = 46, kg = 6, kr = r.right - 262;
-        for (int i = 2; i >= 0; i--) { npKeys[i].set(kr - kw, r.top + 6, kr, r.bottom - 6); kr -= kw + kg; }
+        float textR = r.right - 262;   // tekst tot vlak voor de voortgangsbalk
         c.save();
-        c.clipRect(r.left + 76, r.top, npKeys[0].left - 10, r.bottom);
+        c.clipRect(r.left + 76, r.top, textR, r.bottom);
         String main = (npTitle + (npArtist.isEmpty() ? "" : "  ·  " + npArtist)).toUpperCase(Locale.ROOT);
-        float avail = npKeys[0].left - 10 - (r.left + 82), tw = uiTextWidth(main, 17);
+        float avail = textR - (r.left + 82), tw = uiTextWidth(main, 17);
         if (tw <= avail) {
             text(c, main, r.left + 82, r.top + 26, 17, AMB);
             npScrollFor = "";
@@ -372,9 +382,18 @@ public class CockpitView extends View {
         }
         text(c, npSub.toUpperCase(Locale.ROOT), r.left + 82, r.bottom - 8, 9, dark(AMB, 0.65f));
         c.restore();
-        boolean pressFresh = System.currentTimeMillis() - npPressAt < 250;
-        for (int i = 0; i < 3; i++) drawMusicKey(c, npKeys[i], i, pressFresh && npPressed == i);
-        if (pressFresh) postInvalidateDelayed(260);
+        // veeg-/druk-terugmelding: kort ">> VOLGENDE" e.d. over de band
+        long since = System.currentTimeMillis() - npPressAt;
+        if (since < 900 && npPressed >= 0) {
+            String fb = npPressed == 0 ? Lang.t("<<  VORIGE", "<<  PREVIOUS") : npPressed == 2 ? Lang.t("VOLGENDE  >>", "NEXT  >>")
+                    : (npPlaying ? Lang.t("SPEELT", "PLAYING") : Lang.t("PAUZE", "PAUSED"));
+            p.setColor(0xE0000000);
+            c.drawRoundRect(r.left + 4, r.top + 4, r.right - 4, r.bottom - 4, 6, 6, p);
+            p.setTextAlign(Paint.Align.CENTER);
+            text(c, fb, r.centerX(), r.centerY() + 8, 22, AMB);
+            p.setTextAlign(Paint.Align.LEFT);
+            postInvalidateDelayed(120);
+        }
         int lit = Math.round(Math.max(0f, Math.min(1f, npFrac)) * 18);
         bar(c, r.right - 250, r.bottom - 18, r.right - 92, 8, 18, lit, 2, 0, 0);
         p.setTextAlign(Paint.Align.RIGHT);
@@ -384,6 +403,13 @@ public class CockpitView extends View {
         }
         p.setTextAlign(Paint.Align.LEFT);
         glass(c, r);
+    }
+
+    /** Mediaknop (vorige 0 / speel-pauze 1 / volgende 2) voor andere schermen. */
+    public void uiMusicKey(Canvas c, RectF k, int which, boolean down, boolean playing) {
+        boolean keep = npPlaying; npPlaying = playing;
+        drawMusicKey(c, k, which, down);
+        npPlaying = keep;
     }
 
     /** Kleine chromen drukknop met icoon in amber. */
@@ -955,30 +981,34 @@ public class CockpitView extends View {
             case MotionEvent.ACTION_DOWN:
                 downInClock = rClock.contains(x, y);
                 if (downInClock) postDelayed(longPress, 700);
+                bandDown = npVisible && rBand.contains(x, y);
+                bandLongFired = false; bDownX = x;
+                if (bandDown) postDelayed(bandLong, 650);
+                return true;
+            case MotionEvent.ACTION_MOVE:
+                if (bandDown && Math.abs(x - bDownX) > 30) removeCallbacks(bandLong);
                 return true;
             case MotionEvent.ACTION_UP:
                 removeCallbacks(longPress);
+                removeCallbacks(bandLong);
                 if (downInClock) { downInClock = false; return true; }
                 if (listener == null) return true;
-                int key = -1;
-                if (npVisible) for (int i = 0; i < 3; i++) {
-                    RectF k = npKeys[i];
-                    if (x > k.left - 4 && x < k.right + 4 && y > k.top - 6 && y < k.bottom + 6) key = i;
+                if (bandDown) {
+                    bandDown = false;
+                    if (bandLongFired) return true;
+                    float dx = x - bDownX;
+                    if (Math.abs(dx) > 60) musicKey(dx < 0 ? 2 : 0);   // veeg links = volgende, rechts = vorige
+                    else listener.onMusicTap();
+                    return true;
                 }
-                if (key >= 0) {
-                    npPressed = key; npPressAt = System.currentTimeMillis();
-                    npPinUntil = npPressAt + 20_000;   // na bedienen 20 s "nu speelt" vasthouden
-                    listener.onMusicKey(key);
-                    invalidate();
-                }
-                else if (rBand.contains(x, y)) listener.onMusicTap();
+                if (rBand.contains(x, y)) listener.onMusicTap();
                 else if (rTank.contains(x, y)) listener.onTankTap();
                 else if (rSpeed.contains(x, y)) listener.onSpeedTap();
                 performClick();
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 removeCallbacks(longPress);
-                downInClock = false;
+                downInClock = false; removeCallbacks(bandLong); bandDown = false;
                 return true;
         }
         return true;

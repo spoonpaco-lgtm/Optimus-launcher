@@ -181,6 +181,7 @@ public class TrackerService extends Service implements LocationListener {
     @Override
     public void onDestroy() {
         ui.removeCallbacks(overlayTick);
+        if (media != null) media.remove();
         ui.removeCallbacks(tripTick);
         try { unregisterReceiver(powerRx); } catch (Exception ignored) { }
         try { unregisterReceiver(usbRx); } catch (Exception ignored) { }
@@ -557,10 +558,12 @@ public class TrackerService extends Service implements LocationListener {
     private RetroCard bubble;
     private String bubbleTheme = "";
     private android.view.WindowManager.LayoutParams bp;
+    private MediaOverlay media;
 
     private final Runnable overlayTick = new Runnable() {
         @Override public void run() {
             try { updateOverlay(); } catch (Exception ignored) { }
+            try { if (media == null) media = new MediaOverlay(TrackerService.this); media.update(true); } catch (Exception ignored) { }
             ui.postDelayed(this, 1000);
         }
     };

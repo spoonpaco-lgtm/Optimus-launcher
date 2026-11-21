@@ -35,7 +35,7 @@ import java.util.Random;
  */
 public final class MusicPlayer {
     public static final class Track {
-        public String path, title, artist = "", album = "", folder;
+        public String path, title, artist = "", album = "", genre = "", folder;
         public int dur, no;
         public String label() { return title != null && !title.isEmpty() ? title : new File(path).getName().replaceAll("\\.[^.]+$", ""); }
     }
@@ -96,6 +96,11 @@ public final class MusicPlayer {
                     t.folder = f.getParentFile() == null ? "" : f.getParentFile().getName();
                     String key = t.path + "|" + f.length();
                     JSONObject o = idx.get(key);
+                    if (o != null && !o.has("g")) {
+                        // oud index-item zonder genre: alleen genre bijlezen
+                        try { mmr.setDataSource(t.path); o.put("g", genre(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE))); }
+                        catch (Exception ignored) { try { o.put("g", ""); } catch (Exception ignored2) { } }
+                    }
                     if (o == null) {
                         o = new JSONObject();
                         try {
@@ -105,10 +110,11 @@ public final class MusicPlayer {
                             o.put("b", nz(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)));
                             o.put("d", parse(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)));
                             o.put("n", parse(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)));
+                            o.put("g", genre(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)));
                         } catch (Exception ignored) { }
                         idx.put(key, o);
                     }
-                    t.title = o.optString("t"); t.artist = o.optString("a"); t.album = o.optString("b");
+                    t.title = o.optString("t"); t.artist = o.optString("a"); t.album = o.optString("b"); t.genre = o.optString("g");
                     t.dur = o.optInt("d"); t.no = o.optInt("n");
                     out.add(t);
                     if (++indexed % 25 == 0) changed();
@@ -190,13 +196,38 @@ public final class MusicPlayer {
         } catch (Exception ignored) { }
     }
 
-    /** Groepen voor de lijst: mode 0 = mappen, 1 = artiesten, 2 = albums. Sleutel -> nummers. */
+    /** ID3v1-genrenummers zoals "(17)" of "17" omzetten naar een naam; meerdere genres: eerste. */
+    private static final String[] ID3 = {"Blues","Classic Rock","Country","Dance","Disco","Funk","Grunge","Hip-Hop","Jazz","Metal",
+            "New Age","Oldies","Other","Pop","R&B","Rap","Reggae","Rock","Techno","Industrial","Alternative","Ska","Death Metal",
+            "Pranks","Soundtrack","Euro-Techno","Ambient","Trip-Hop","Vocal","Jazz+Funk","Fusion","Trance","Classical","Instrumental",
+            "Acid","House","Game","Sound Clip","Gospel","Noise","Alternative Rock","Bass","Soul","Punk","Space","Meditative",
+            "Instrumental Pop","Instrumental Rock","Ethnic","Gothic","Darkwave","Techno-Industrial","Electronic","Pop-Folk",
+            "Eurodance","Dream","Southern Rock","Comedy","Cult","Gangsta","Top 40","Christian Rap","Pop/Funk","Jungle",
+            "Native American","Cabaret","New Wave","Psychedelic","Rave","Showtunes","Trailer","Lo-Fi","Tribal","Acid Punk",
+            "Acid Jazz","Polka","Retro","Musical","Rock & Roll","Hard Rock"};
+    static String genre(String g) {
+        if (g == null) return "";
+        g = g.trim();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(?:\\((\\d+)\\)(.*)|(\\d+))$").matcher(g);
+        if (m.matches()) {
+            try {
+                int n = Integer.parseInt(m.group(1) != null ? m.group(1) : m.group(3));
+                String rest = m.group(2) == null ? "" : m.group(2).trim();
+                if (!rest.isEmpty()) g = rest; else if (n < ID3.length) return ID3[n];
+            } catch (Exception ignored) { }
+        }
+        for (String sep : new String[]{";", "/", ","}) { int i = g.indexOf(sep); if (i > 0) { g = g.substring(0, i).trim(); break; } }
+        return g.isEmpty() ? g : g.substring(0, 1).toUpperCase(java.util.Locale.ROOT) + g.substring(1);
+    }
+
+    /** Groepen voor de lijst: mode 0 = mappen, 1 = artiesten, 2 = albums, 3 = genres. Sleutel -> nummers. */
     public LinkedHashMap<String, List<Track>> groups(int mode) {
         Map<String, List<Track>> m = new HashMap<>();
         synchronized (library) {
             for (Track t : library) {
                 String k = mode == 0 ? t.folder : mode == 1 ? (t.artist.isEmpty() ? Lang.t("ONBEKENDE ARTIEST", "UNKNOWN ARTIST") : t.artist)
-                        : (t.album.isEmpty() ? Lang.t("ONBEKEND ALBUM", "UNKNOWN ALBUM") : t.album);
+                        : mode == 2 ? (t.album.isEmpty() ? Lang.t("ONBEKEND ALBUM", "UNKNOWN ALBUM") : t.album)
+                        : (t.genre.isEmpty() ? Lang.t("GEEN GENRE", "NO GENRE") : t.genre);
                 List<Track> l = m.get(k);
                 if (l == null) { l = new ArrayList<>(); m.put(k, l); }
                 l.add(t);
@@ -209,7 +240,8 @@ public final class MusicPlayer {
             List<Track> l = m.get(k);
             Collections.sort(l, (a, b) -> {
                 int c = a.album.compareToIgnoreCase(b.album);
-                if (mode != 2 && c != 0) return c;
+                if (mode != 2 && mode != 3 && c != 0) return c;
+                if (mode == 3) { int ca = a.artist.compareToIgnoreCase(b.artist); if (ca != 0) return ca; if (c != 0) return c; }
                 if (a.no != b.no && a.no > 0 && b.no > 0) return a.no - b.no;
                 return a.path.compareToIgnoreCase(b.path);
             });
