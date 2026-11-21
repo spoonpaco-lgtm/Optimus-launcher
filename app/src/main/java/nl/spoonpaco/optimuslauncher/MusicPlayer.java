@@ -339,7 +339,7 @@ public final class MusicPlayer {
     // ---------------------------------------------------------------- audiofocus
 
     private final AudioManager.OnAudioFocusChangeListener focus = change -> {
-        if (change == AudioManager.AUDIOFOCUS_LOSS) { pausedByFocus = false; pause(); }
+        if (change == AudioManager.AUDIOFOCUS_LOSS) { pausedByFocus = false; if (isPlaying()) CarLogger.note("muziek: andere app neemt het geluid over, USB gepauzeerd"); pause(); }
         else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) { if (isPlaying()) { pausedByFocus = true; pause(); } }
         else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) { try { if (mp != null) mp.setVolume(0.3f, 0.3f); } catch (Exception ignored) { } }
         else if (change == AudioManager.AUDIOFOCUS_GAIN) {
@@ -493,6 +493,8 @@ public final class MusicPlayer {
             o = new JSONObject(new String(b, 0, n, "UTF-8"));
         } catch (Exception e) { return; }
         if (!o.optBoolean("playing", false) || isPlaying()) return;
+        AudioManager am0 = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+        if (am0 != null && am0.isMusicActive()) { CarLogger.note("muziek: ander geluid speelt al (AA/BT), USB niet hervat"); return; }
         // zelfde wachtrij nog in het geheugen (tablet sliep alleen): gewoon verder
         if (current() != null && mp != null && prepared) { resume(); CarLogger.note("muziek: verder na contact aan"); return; }
         if (all().isEmpty()) {

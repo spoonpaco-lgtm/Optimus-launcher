@@ -265,10 +265,10 @@ public class CockpitView extends View {
         p.setLetterSpacing(0f);
         }
 
-        // kompas (of "nu speelt" als er muziek speelt, om de 10 s wisselend)
+        // kompas, of "nu speelt" zolang er muziek speelt
         RectF r = new RectF(312, 4, 1062, 58);
         long nowMs = System.currentTimeMillis();
-        npVisible = npShow && (nowMs < npPinUntil || (nowMs / 10000) % 2 == 1);
+        npVisible = npShow && (npPlaying || nowMs < npPinUntil);   // speelt = muziek, anders kompas
         if (npVisible) drawNowPlaying(c, r); else {
         c.save();
         c.clipRect(r);
