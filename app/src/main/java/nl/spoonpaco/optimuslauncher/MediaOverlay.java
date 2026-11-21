@@ -106,9 +106,9 @@ final class MediaOverlay {
             pt.uiWindow(c, tw, AMB);
             c.save(); c.clipRect(tw.left + 6, tw.top, tw.right - 6, tw.bottom);
             if (t != null) {
-                pt.uiText(c, t.label().toUpperCase(Locale.ROOT), tw.left + 12, tw.top + 30, 19, AMB, Paint.Align.LEFT);
-                pt.uiText(c, (t.artist.isEmpty() ? "-" : t.artist).toUpperCase(Locale.ROOT), tw.left + 12, tw.top + 58, 15, 0xFFF0CC88, Paint.Align.LEFT);
-                pt.uiText(c, t.album.toUpperCase(Locale.ROOT), tw.left + 12, tw.top + 82, 12, 0xFFC8A060, Paint.Align.LEFT);
+                pt.uiText(c, t.label().toUpperCase(Locale.ROOT), tw.left + 12, tw.top + 30, 21, AMB, Paint.Align.LEFT);
+                pt.uiText(c, (t.artist.isEmpty() ? "-" : t.artist).toUpperCase(Locale.ROOT), tw.left + 12, tw.top + 58, 16, 0xFFF0CC88, Paint.Align.LEFT);
+                pt.uiText(c, t.album.toUpperCase(Locale.ROOT), tw.left + 12, tw.top + 83, 13, 0xFFD8B070, Paint.Align.LEFT);
             }
             int dur = mp.durationMs(), pos = mp.positionMs();
             pt.uiText(c, MusicPlayer.time(pos) + " / " + MusicPlayer.time(dur), tw.left + 12, tw.bottom - 12, 12, 0xFFC8A060, Paint.Align.LEFT);

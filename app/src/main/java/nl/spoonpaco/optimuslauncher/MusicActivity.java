@@ -147,9 +147,11 @@ public class MusicActivity extends Activity implements MusicPlayer.Listener {
             if (t != null) {
                 pt.uiText(c, t.label().toUpperCase(Locale.ROOT), np.left + 18, np.top + 48, 26, AMB, Paint.Align.LEFT);
                 pt.uiText(c, (t.artist.isEmpty() ? "-" : t.artist).toUpperCase(Locale.ROOT), np.left + 18, np.top + 84, 20, 0xFFF0CC88, Paint.Align.LEFT);
+                c.save(); c.clipRect(np.left, np.top, np.right - 170, np.bottom);
                 pt.uiText(c, (t.album.isEmpty() ? "" : t.album.toUpperCase(Locale.ROOT) + "  ·  ")
                         + String.format(Locale.US, Lang.t("NUMMER %d VAN %d", "TRACK %d OF %d"), mp.queueIndex() + 1, mp.queueSize()),
                         np.left + 18, np.top + 112, 13, dim(AMB), Paint.Align.LEFT);
+                c.restore();
             } else if (bt) {
                 pt.uiText(c, BtMedia.title.toUpperCase(Locale.ROOT), np.left + 18, np.top + 48, 26, AMB, Paint.Align.LEFT);
                 pt.uiText(c, String.valueOf(BtMedia.artist).toUpperCase(Locale.ROOT), np.left + 18, np.top + 82, 16, 0xFFE6BE78, Paint.Align.LEFT);

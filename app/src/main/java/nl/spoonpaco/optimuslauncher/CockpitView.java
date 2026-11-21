@@ -408,6 +408,7 @@ public class CockpitView extends View {
     /** Mediaknop (vorige 0 / speel-pauze 1 / volgende 2) voor andere schermen. */
     public void uiMusicKey(Canvas c, RectF k, int which, boolean down, boolean playing) {
         boolean keep = npPlaying; npPlaying = playing;
+        p.setAlpha(255); p.setStyle(Paint.Style.FILL);
         drawMusicKey(c, k, which, down);
         npPlaying = keep;
     }
