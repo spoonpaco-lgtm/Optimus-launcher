@@ -44,12 +44,16 @@ public class MusicActivity extends Activity implements MusicPlayer.Listener {
     @Override protected void onPause() { super.onPause(); mp.removeListener(this); v.removeCallbacks(v.ticker); }
     @Override public void onChanged() { v.invalidate(); }
 
+    @Override public void onBackPressed() { if (!v.back()) super.onBackPressed(); }
+
     private class MusicView extends View {
         private final CockpitView pt;
         private final Theme theme;
         private float s = 1f, H = 650f;
         private int mode = 1;               // 0 mappen, 1 artiesten, 2 albums, 3 genres
-        private String openGroup = null;     // null = groepenlijst
+        private final List<String> path = new ArrayList<>();   // gekozen groepen, bv. [artiest, album]
+        private boolean searching = false;
+        private final StringBuilder query = new StringBuilder();
         private float scroll = 0, downY, lastY; private boolean dragging;
         private final List<Object[]> hits = new ArrayList<>();
         private final RectF listArea = new RectF(18, 132, 482, 0);
@@ -60,6 +64,13 @@ public class MusicActivity extends Activity implements MusicPlayer.Listener {
             theme = t;
             setLayerType(LAYER_TYPE_SOFTWARE, null);
             pt = RetroUi.painter(c, t);
+        }
+
+        /** Terugknop: eerst zoeken sluiten, dan een niveau omhoog. */
+        boolean back() {
+            if (searching) { searching = false; invalidate(); return true; }
+            if (!path.isEmpty()) { path.remove(path.size() - 1); scroll = 0; invalidate(); return true; }
+            return false;
         }
 
         void tick() { invalidate(); removeCallbacks(ticker); postDelayed(ticker, 1000); }
@@ -73,7 +84,7 @@ public class MusicActivity extends Activity implements MusicPlayer.Listener {
             switch (e.getAction()) {
                 case MotionEvent.ACTION_DOWN: downY = lastY = y; dragging = false; return true;
                 case MotionEvent.ACTION_MOVE:
-                    if (listArea.contains(x, downY) && Math.abs(y - downY) > 10) dragging = true;
+                    if (curList.contains(x, downY) && Math.abs(y - downY) > 10) dragging = true;
                     if (dragging) { scroll = Math.max(0, scroll - (y - lastY)); lastY = y; invalidate(); }
                     return true;
                 case MotionEvent.ACTION_UP:
@@ -105,12 +116,15 @@ public class MusicActivity extends Activity implements MusicPlayer.Listener {
             pt.uiText(c, "BT", 434, 49, 13, bt ? GRN : 0xFF6C6C78, Paint.Align.LEFT);
 
             String[] tabs = {Lang.t("MAP", "FOLDER"), Lang.t("ARTIEST", "ARTIST"), "ALBUM", "GENRE"};
-            float tw = (464 - 3 * 8) / 4f;
+            float tw = (464 - 4 * 8 - 70) / 4f;
+            RectF sr = new RectF(18 + 4 * (tw + 8), 70, 482, 118);
+            pt.uiKey(c, sr, Lang.t("ZOEK", "FIND"), searching, key, 13);
+            hit(sr, () -> { searching = !searching; scroll = 0; });
             for (int i = 0; i < 4; i++) {
                 final int m = i;
                 RectF r = new RectF(18 + i * (tw + 8), 70, 18 + i * (tw + 8) + tw, 118);
-                pt.uiButton(c, r, tabs[i], mode == i, key, 12);
-                hit(r, () -> { mode = m; openGroup = null; scroll = 0; });
+                pt.uiButton(c, r, tabs[i], mode == i && !searching, key, 11);
+                hit(r, () -> { mode = m; path.clear(); searching = false; scroll = 0; });
             }
             drawList(c, key);
 
@@ -211,55 +225,189 @@ public class MusicActivity extends Activity implements MusicPlayer.Listener {
             c.save(); c.scale(s, s); pt.uiScanlines(c, 1240, H); c.restore();
         }
 
+        /** Indeling per tabblad: welke niveaus je doorklikt voordat je bij de nummers komt. */
+        private int[] levels() {
+            switch (mode) {
+                case 0: return new int[]{0};          // map
+                case 1: return new int[]{1, 2};       // artiest > album
+                case 2: return new int[]{2};          // album
+                default: return new int[]{3, 1, 2};   // genre > artiest > album
+            }
+        }
+
+        private String keyOf(MusicPlayer.Track t, int lvl) {
+            switch (lvl) {
+                case 0: return t.folder;
+                case 1: return t.artist.isEmpty() ? Lang.t("ONBEKENDE ARTIEST", "UNKNOWN ARTIST") : t.artist;
+                case 2: return t.album.isEmpty() ? Lang.t("ONBEKEND ALBUM", "UNKNOWN ALBUM") : t.album;
+                default: return t.genre.isEmpty() ? Lang.t("GEEN GENRE", "NO GENRE") : t.genre;
+            }
+        }
+
+        private String count(int n) { return n + (n == 1 ? Lang.t(" NUMMER", " TRACK") : Lang.t(" NUMMERS", " TRACKS")); }
+
+        private void sortTracks(List<MusicPlayer.Track> l) {
+            java.util.Collections.sort(l, (a, b) -> {
+                int c = a.album.compareToIgnoreCase(b.album);
+                if (c != 0) return c;
+                if (a.no != b.no && a.no > 0 && b.no > 0) return a.no - b.no;
+                return a.path.compareToIgnoreCase(b.path);
+            });
+        }
+
         private void drawList(Canvas c, int key) {
-            LinkedHashMap<String, List<MusicPlayer.Track>> g = mp.groups(mode);
             List<Object[]> rows = new ArrayList<>(); // {label, sub, runnable, isPlayingRow}
             MusicPlayer.Track cur = mp.current();
-            if (openGroup == null) {
-                List<MusicPlayer.Track> all = mp.all();
-                if (!all.isEmpty()) rows.add(new Object[]{Lang.t("ALLES AFSPELEN", "PLAY ALL"), all.size() + (all.size() == 1 ? Lang.t(" NUMMER", " TRACK") : Lang.t(" NUMMERS", " TRACKS")),
-                        (Runnable) () -> mp.play(all, 0), false});
-                for (java.util.Map.Entry<String, List<MusicPlayer.Track>> e : g.entrySet()) {
-                    final String name = e.getKey();
-                    boolean has = cur != null && e.getValue().contains(cur);
-                    rows.add(new Object[]{name, e.getValue().size() + (e.getValue().size() == 1 ? Lang.t(" NUMMER", " TRACK") : Lang.t(" NUMMERS", " TRACKS")),
-                            (Runnable) () -> { openGroup = name; scroll = 0; }, has});
+            if (searching) { searchRows(rows, cur); }
+            else {
+                int[] lv = levels();
+                List<MusicPlayer.Track> set = new ArrayList<>();
+                for (MusicPlayer.Track t : mp.all()) {
+                    boolean ok = true;
+                    for (int d = 0; d < path.size() && d < lv.length; d++) if (!keyOf(t, lv[d]).equals(path.get(d))) { ok = false; break; }
+                    if (ok) set.add(t);
                 }
-            } else {
-                final List<MusicPlayer.Track> tr = g.get(openGroup);
-                rows.add(new Object[]{"< " + Lang.t("TERUG", "BACK"), openGroup, (Runnable) () -> { openGroup = null; scroll = 0; }, false});
-                if (tr != null) for (int i = 0; i < tr.size(); i++) {
-                    final int idx = i;
-                    MusicPlayer.Track t = tr.get(i);
-                    rows.add(new Object[]{t.label(), (t.artist.isEmpty() ? "" : t.artist + "  ") + (t.dur > 0 ? MusicPlayer.time(t.dur) : ""),
-                            (Runnable) () -> mp.play(tr, idx), t == cur});
+                if (!path.isEmpty()) {
+                    String crumb = android.text.TextUtils.join("  >  ", path);
+                    rows.add(new Object[]{"< " + Lang.t("TERUG", "BACK"), crumb, (Runnable) () -> { path.remove(path.size() - 1); scroll = 0; }, false});
+                }
+                if (path.size() < lv.length) {
+                    final List<MusicPlayer.Track> playAll = new ArrayList<>(set);
+                    sortTracks(playAll);
+                    if (!playAll.isEmpty()) rows.add(new Object[]{path.isEmpty() ? Lang.t("ALLES AFSPELEN", "PLAY ALL") : Lang.t("ALLES VAN ", "ALL OF ") + path.get(path.size() - 1),
+                            count(playAll.size()), (Runnable) () -> mp.play(playAll, 0), false});
+                    int lvl = lv[path.size()];
+                    java.util.TreeMap<String, List<MusicPlayer.Track>> g = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+                    for (MusicPlayer.Track t : set) {
+                        String k = keyOf(t, lvl);
+                        List<MusicPlayer.Track> l = g.get(k);
+                        if (l == null) { l = new ArrayList<>(); g.put(k, l); }
+                        l.add(t);
+                    }
+                    for (java.util.Map.Entry<String, List<MusicPlayer.Track>> e : g.entrySet()) {
+                        final String name = e.getKey();
+                        boolean has = cur != null && e.getValue().contains(cur);
+                        String sub = count(e.getValue().size());
+                        if (lvl == 2 && !e.getValue().get(0).artist.isEmpty() && path.isEmpty()) sub = e.getValue().get(0).artist + "  ·  " + sub;
+                        rows.add(new Object[]{name, sub, (Runnable) () -> { path.add(name); scroll = 0; }, has});
+                    }
+                } else {
+                    final List<MusicPlayer.Track> tr = set;
+                    sortTracks(tr);
+                    for (int i = 0; i < tr.size(); i++) {
+                        final int idx = i;
+                        MusicPlayer.Track t = tr.get(i);
+                        rows.add(new Object[]{(t.no > 0 ? t.no + ". " : "") + t.label(), (mode == 0 && !t.artist.isEmpty() ? t.artist + "  " : "") + (t.dur > 0 ? MusicPlayer.time(t.dur) : ""),
+                                (Runnable) () -> mp.play(tr, idx), t == cur});
+                    }
                 }
             }
-            float rowH = 80, top = listArea.top;
-            float maxScroll = Math.max(0, rows.size() * rowH - listArea.height());
+            RectF la = listArea;
+            if (searching) la = drawSearchBox(c, key);
+            curList.set(la);
+            float rowH = searching ? 66 : 80, top = la.top;
+            float maxScroll = Math.max(0, rows.size() * rowH - la.height());
             if (scroll > maxScroll) scroll = maxScroll;
-            c.save(); c.clipRect(listArea);
+            c.save(); c.clipRect(la);
             for (int i = 0; i < rows.size(); i++) {
                 float y = top + i * rowH - scroll;
-                if (y + rowH < listArea.top || y > listArea.bottom) continue;
-                RectF r = new RectF(listArea.left, y + 2, listArea.right, y + rowH - 4);
+                if (y + rowH < la.top || y > la.bottom) continue;
+                RectF r = new RectF(la.left, y + 2, la.right, y + rowH - 4);
                 boolean on = (Boolean) rows.get(i)[3];
                 if (on) pt.uiWindow(c, r, key);
                 else { Paint q = new Paint(); q.setColor(0xFF121216); c.drawRoundRect(r, 5, 5, q); }
                 pt.uiLamp(c, r.left + 20, r.centerY(), 7, key, on);
                 c.save(); c.clipRect(r.left, r.top, r.right - 24, r.bottom);
-                pt.uiText(c, String.valueOf(rows.get(i)[0]).toUpperCase(Locale.ROOT), r.left + 42, r.top + 32, 19, on ? key : 0xFFE8E8F0, Paint.Align.LEFT);
-                pt.uiText(c, String.valueOf(rows.get(i)[1]).toUpperCase(Locale.ROOT), r.left + 42, r.top + 58, 12, 0xFFA8A8B4, Paint.Align.LEFT);
+                pt.uiText(c, String.valueOf(rows.get(i)[0]).toUpperCase(Locale.ROOT), r.left + 42, r.top + (searching ? 27 : 32), searching ? 17 : 19, on ? key : 0xFFE8E8F0, Paint.Align.LEFT);
+                pt.uiText(c, String.valueOf(rows.get(i)[1]).toUpperCase(Locale.ROOT), r.left + 42, r.top + (searching ? 49 : 58), 12, 0xFFA8A8B4, Paint.Align.LEFT);
                 c.restore();
                 pt.uiText(c, ">", r.right - 10, r.centerY() + 7, 18, 0xFF8E8E9A, Paint.Align.RIGHT);
                 if (on) pt.uiGlass(c, r);
                 // alleen tikbaar als zichtbaar
-                RectF hr = new RectF(r.left, Math.max(r.top, listArea.top), r.right, Math.min(r.bottom, listArea.bottom));
+                RectF hr = new RectF(r.left, Math.max(r.top, la.top), r.right, Math.min(r.bottom, la.bottom));
                 if (hr.height() > 10) hit(hr, (Runnable) rows.get(i)[2]);
             }
             c.restore();
-            if (rows.isEmpty()) pt.uiText(c, mp.scanning ? Lang.t("BEZIG MET LEZEN...", "READING...") : Lang.t("GEEN MUZIEK GEVONDEN", "NO MUSIC FOUND"),
-                    listArea.left + 10, listArea.top + 40, 12, 0xFF6C6C78, Paint.Align.LEFT);
+            if (rows.isEmpty()) pt.uiText(c, searching ? (query.length() == 0 ? Lang.t("TYP EEN ARTIEST, ALBUM OF NUMMER", "TYPE AN ARTIST, ALBUM OR SONG") : Lang.t("NIETS GEVONDEN", "NOTHING FOUND"))
+                    : mp.scanning ? Lang.t("BEZIG MET LEZEN...", "READING...") : Lang.t("GEEN MUZIEK GEVONDEN", "NO MUSIC FOUND"),
+                    la.left + 10, la.top + 40, 14, 0xFF8E8E9A, Paint.Align.LEFT);
+        }
+
+        private final RectF curList = new RectF();
+
+        /** Zoekveld + eigen toetsenbord onderin; geeft het vak voor de resultaten terug. */
+        private RectF drawSearchBox(Canvas c, int key) {
+            int AMB = pt.uiAmb();
+            RectF q = new RectF(listArea.left, listArea.top, listArea.right, listArea.top + 52);
+            pt.uiWindow(c, q, AMB);
+            pt.uiLamp(c, q.left + 20, q.centerY(), 7, AMB, true);
+            String txt = query.length() == 0 ? Lang.t("ZOEKEN...", "SEARCH...") : query.toString();
+            pt.uiText(c, txt + ((System.currentTimeMillis() / 500) % 2 == 0 ? "_" : ""), q.left + 40, q.centerY() + 8, 22,
+                    query.length() == 0 ? 0xFF6C6C78 : AMB, Paint.Align.LEFT);
+            pt.uiGlass(c, q);
+            postInvalidateDelayed(500);
+
+            String[] rowsK = {"1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"};
+            float gap = 6, kh = 54, kbTop = listArea.bottom - 5 * kh - 4 * gap;
+            float kw = (listArea.width() - 9 * gap) / 10f;
+            for (int rI = 0; rI < 4; rI++) {
+                String r = rowsK[rI];
+                float off = (10 - r.length()) * (kw + gap) / 2f;
+                for (int i = 0; i < r.length(); i++) {
+                    final String ch = String.valueOf(r.charAt(i));
+                    RectF kr = new RectF(listArea.left + off + i * (kw + gap), kbTop + rI * (kh + gap),
+                            listArea.left + off + i * (kw + gap) + kw, kbTop + rI * (kh + gap) + kh);
+                    pt.uiKey(c, kr, ch, false, key, 19);
+                    hit(kr, () -> { if (query.length() < 30) query.append(ch); scroll = 0; });
+                }
+            }
+            float by = kbTop + 4 * (kh + gap);
+            float w3 = (listArea.width() - 2 * gap);
+            RectF sp = new RectF(listArea.left, by, listArea.left + w3 * 0.5f, by + kh);
+            RectF bs = new RectF(sp.right + gap, by, sp.right + gap + w3 * 0.25f, by + kh);
+            RectF cl = new RectF(bs.right + gap, by, listArea.right, by + kh);
+            pt.uiKey(c, sp, Lang.t("SPATIE", "SPACE"), false, key, 15);
+            pt.uiKey(c, bs, "<", false, key, 19);
+            pt.uiKey(c, cl, Lang.t("WIS", "CLEAR"), false, key, 15);
+            hit(sp, () -> { if (query.length() > 0 && query.charAt(query.length() - 1) != ' ') query.append(' '); });
+            hit(bs, () -> { if (query.length() > 0) query.setLength(query.length() - 1); scroll = 0; });
+            hit(cl, () -> { query.setLength(0); scroll = 0; });
+            return new RectF(listArea.left, q.bottom + 8, listArea.right, kbTop - 10);
+        }
+
+        /** Zoekresultaten: artiesten, albums en nummers waar de zoektekst in voorkomt. */
+        private void searchRows(List<Object[]> rows, MusicPlayer.Track cur) {
+            String q = query.toString().trim().toLowerCase(Locale.ROOT);
+            if (q.isEmpty()) return;
+            java.util.TreeMap<String, Integer> artists = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER), albums = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+            java.util.Map<String, String> albumArtist = new java.util.HashMap<>();
+            final List<MusicPlayer.Track> tracks = new ArrayList<>();
+            for (MusicPlayer.Track t : mp.all()) {
+                if (!t.artist.isEmpty() && t.artist.toLowerCase(Locale.ROOT).contains(q)) artists.merge(t.artist, 1, Integer::sum);
+                if (!t.album.isEmpty() && t.album.toLowerCase(Locale.ROOT).contains(q)) { albums.merge(t.album, 1, Integer::sum); albumArtist.put(t.album, t.artist); }
+                if (t.label().toLowerCase(Locale.ROOT).contains(q) && tracks.size() < 40) tracks.add(t);
+            }
+            int n = 0;
+            for (java.util.Map.Entry<String, Integer> e : artists.entrySet()) {
+                if (n++ >= 6) break;
+                final String a = e.getKey();
+                rows.add(new Object[]{a, Lang.t("ARTIEST  ·  ", "ARTIST  ·  ") + count(e.getValue()),
+                        (Runnable) () -> { searching = false; mode = 1; path.clear(); path.add(a); scroll = 0; }, false});
+            }
+            n = 0;
+            for (java.util.Map.Entry<String, Integer> e : albums.entrySet()) {
+                if (n++ >= 6) break;
+                final String al = e.getKey();
+                String ar = albumArtist.get(al);
+                rows.add(new Object[]{al, "ALBUM  ·  " + (ar == null || ar.isEmpty() ? "" : ar + "  ·  ") + count(e.getValue()),
+                        (Runnable) () -> { searching = false; mode = 2; path.clear(); path.add(al); scroll = 0; }, false});
+            }
+            for (int i = 0; i < tracks.size(); i++) {
+                final int idx = i;
+                MusicPlayer.Track t = tracks.get(i);
+                rows.add(new Object[]{t.label(), Lang.t("NUMMER", "SONG") + (t.artist.isEmpty() ? "" : "  ·  " + t.artist),
+                        (Runnable) () -> mp.play(tracks, idx), t == cur});
+            }
         }
 
         /** Eigen placeholder-hoes: zon boven een raster (zelf getekend). */
