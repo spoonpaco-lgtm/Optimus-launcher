@@ -33,6 +33,7 @@ public class MenuView extends View {
         void setOverlay(boolean on);
         void update();
         void debug();
+        default void androidSettings() { }
         boolean startAA();
         boolean overlay();
         default boolean musicResume() { return true; }
@@ -55,7 +56,7 @@ public class MenuView extends View {
             {"AUTO", "CAR", "km-stand · onderhoud · accu", "odometer · service · battery"},
             {"RITTEN", "TRIPS", "rittenlog · locaties · scores", "trip log · places · scores"},
             {"INSTELLINGEN", "SETTINGS", "taal · opstarten · muziek", "language · start-up · music"},
-            {"SYSTEEM", "SYSTEM", "update · debug", "update · debug"}};
+            {"SYSTEEM", "SYSTEM", "update · debug · android", "update · debug · android"}};
 
     public MenuView(Context c, Theme t, Store store, Host host) {
         super(c);
@@ -365,5 +366,7 @@ public class MenuView extends View {
         pt.uiGlass(c, w);
         label(c, "SPEAKERTEST", x0, w.bottom + 40, AMB);
         button(c, x0, w.bottom + 54, x0 + bw, w.bottom + 114, Lang.t("LINKS / RECHTS", "LEFT / RIGHT"), false, host::speakerTest);
+        label(c, "ANDROID", x0 + bw + 20, w.bottom + 40, AMB);
+        button(c, x0 + bw + 20, w.bottom + 54, x1, w.bottom + 114, Lang.t("INSTELLINGEN", "SETTINGS"), false, host::androidSettings);
     }
 }
