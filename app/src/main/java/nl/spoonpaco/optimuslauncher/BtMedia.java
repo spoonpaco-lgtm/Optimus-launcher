@@ -42,12 +42,12 @@ public final class BtMedia {
                     try {
                         controller = new MediaController(c, browser.getSessionToken());
                         controller.registerCallback(cb, H);
+                        if (!"verbonden".equals(status)) CarLogger.note("btmedia: verbonden met Bluetooth-muziek");
                         status = "verbonden";
-                        CarLogger.note("btmedia: verbonden met Bluetooth-muziek");
                         read();
                     } catch (Exception e) { status = "fout: " + e.getMessage(); }
                 }
-                @Override public void onConnectionSuspended() { status = "onderbroken"; retry(c); }
+                @Override public void onConnectionSuspended() { retry(c); }
                 @Override public void onConnectionFailed() { status = "mislukt"; retry(c); }
             }, null);
             browser.connect();

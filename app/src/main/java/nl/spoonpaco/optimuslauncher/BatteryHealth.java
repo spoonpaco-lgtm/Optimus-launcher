@@ -35,6 +35,13 @@ public final class BatteryHealth {
 
     public static synchronized void init(Context c) {
         sp = c.getSharedPreferences("battery", Context.MODE_PRIVATE);
+        if (!sp.getBoolean("cleaned1", false)) {
+            StringBuilder ok = new StringBuilder();
+            for (String x : sp.getString("charge", "").split(";")) {
+                try { if (Float.parseFloat(x) >= 13.0f) ok.append(ok.length() == 0 ? "" : ";").append(x); } catch (Exception ignored) { }
+            }
+            sp.edit().putString("charge", ok.toString()).putBoolean("cleaned1", true).apply();
+        }
         evaluate();
     }
 
@@ -57,16 +64,22 @@ public final class BatteryHealth {
                 // motor draait: start vastleggen
                 window = false;
                 runningSince = now; chargeN = 0; chargeSum = 0;
-                if (rest >= 13.0f) return; // motor draaide al (dienst herstart tijdens rijden): geen startmeting
-                boolean dipSeen = rest > 0 && crankMin < rest - 0.4f;
-                push("crank", dipSeen ? crankMin : -1f);
-                push("rest", rest);
-                CarLogger.note(String.format(Locale.US, "accu: start, rust %.2f V, startdip %s",
-                        rest, dipSeen ? String.format(Locale.US, "%.2f V", crankMin) : "niet gezien"));
+                boolean dipSeen = rest > 0 && crankMin < rest - 0.4f && crankMin < 12.0f;
+                if (dipSeen) push("crank", crankMin);
+                // rustspanning alleen als de accu echt rustte (net na een rit staat er nog ~13 V oppervlaktelading op)
+                if (rest > 0 && rest < 13.0f) push("rest", rest);
+                if (dipSeen || (rest > 0 && rest < 13.0f))
+                    CarLogger.note(String.format(Locale.US, "accu: start, rust %.2f V, startdip %s",
+                            rest, dipSeen ? String.format(Locale.US, "%.2f V", crankMin) : "niet gezien"));
                 evaluate();
             } else if (now - windowStart > 10 * 60_000L) {
                 window = false; // geen start binnen 10 min
             }
+        } else if (runningSince > 0 && v < 13.0f) {
+            // motor uit (contact nog aan): geen laadspanning meer meten
+            runningSince = 0; chargeN = 0; chargeSum = 0;
+        } else if (runningSince == 0 && v >= 13.5f && !window) {
+            runningSince = now; chargeN = 0; chargeSum = 0;   // motor (weer) gestart zonder contactwissel
         } else if (runningSince > 0 && now - runningSince > 120_000L) {
             chargeSum += v; chargeN++;
             if (chargeN >= 30) { // ~5 min metingen
