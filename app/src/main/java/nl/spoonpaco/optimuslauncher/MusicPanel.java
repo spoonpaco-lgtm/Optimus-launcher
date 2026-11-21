@@ -135,7 +135,10 @@ public class MusicPanel extends View {
         Bitmap art = mp.art();
         if (art != null) {
             c.drawBitmap(art, null, new RectF(ar.left + 10, ar.top + 10, ar.right - 10, ar.bottom - 10), new Paint(Paint.FILTER_BITMAP_FLAG));
-        } else placeholder(c, new RectF(ar.left + 10, ar.top + 10, ar.right - 10, ar.bottom - 10), key);
+        } else {
+            Synthwave.draw(c, new RectF(ar.left + 10, ar.top + 10, ar.right - 10, ar.bottom - 10), key, System.currentTimeMillis(), mp.isPlaying());
+            if (mp.isPlaying()) postInvalidateDelayed(66, (int) (ar.left * s), (int) (ar.top * s), (int) (ar.right * s) + 1, (int) (ar.bottom * s) + 1);
+        }
         pt.uiGlass(c, ar);
 
         MusicPlayer.Track t = mp.current();

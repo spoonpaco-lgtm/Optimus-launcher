@@ -142,7 +142,10 @@ final class MediaOverlay {
             pt.uiWindow(c, ar, key);
             Bitmap art = mp.art();
             if (art != null) c.drawBitmap(art, null, new RectF(ar.left + 5, ar.top + 5, ar.right - 5, ar.bottom - 5), new Paint(Paint.FILTER_BITMAP_FLAG));
-            else pt.uiText(c, "USB", ar.centerX(), ar.centerY() + 8, 22, key & 0x88FFFFFF, Paint.Align.CENTER);
+            else {
+                Synthwave.draw(c, new RectF(ar.left + 5, ar.top + 5, ar.right - 5, ar.bottom - 5), key, System.currentTimeMillis(), mp.isPlaying());
+                if (mp.isPlaying()) postInvalidateDelayed(66, (int) (ar.left * u), (int) (ar.top * u), (int) (ar.right * u) + 1, (int) (ar.bottom * u) + 1);
+            }
             pt.uiGlass(c, ar);
 
             // rechtsboven: bron + tijd
