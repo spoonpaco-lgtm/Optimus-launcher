@@ -181,7 +181,7 @@ public class TrackerService extends Service implements LocationListener {
     @Override
     public void onDestroy() {
         ui.removeCallbacks(overlayTick);
-        if (media != null) media.remove();
+        if (media != null) { media.remove(); media.collapse(); }
         ui.removeCallbacks(tripTick);
         try { unregisterReceiver(powerRx); } catch (Exception ignored) { }
         try { unregisterReceiver(usbRx); } catch (Exception ignored) { }
