@@ -34,6 +34,7 @@ public class MenuView extends View {
         void update();
         void debug();
         default void androidSettings() { }
+        default void eq() { }
         boolean startAA();
         boolean overlay();
         default boolean musicResume() { return true; }
@@ -55,7 +56,7 @@ public class MenuView extends View {
             {"THEMA", "THEME", "kleuren + stijl", "colours + style"},
             {"AUTO", "CAR", "km-stand · onderhoud · accu", "odometer · service · battery"},
             {"RITTEN", "TRIPS", "rittenlog · locaties · scores", "trip log · places · scores"},
-            {"INSTELLINGEN", "SETTINGS", "taal · opstarten · muziek", "language · start-up · music"},
+            {"INSTELLINGEN", "SETTINGS", "taal · muziek · geluid", "language · music · sound"},
             {"SYSTEEM", "SYSTEM", "update · debug · android", "update · debug · android"}};
 
     public MenuView(Context c, Theme t, Store store, Host host) {
@@ -347,6 +348,9 @@ public class MenuView extends View {
         label(c, Lang.t("MUZIEK DOORSPELEN NA CONTACT AAN", "RESUME MUSIC ON IGNITION"), x0, 392, AMB);
         button(c, x0, 406, x0 + bw, 466, Lang.t("AAN", "ON"), mr, () -> { host.setMusicResume(true); invalidate(); });
         button(c, x0 + bw + 20, 406, x1, 466, Lang.t("UIT", "OFF"), !mr, () -> { host.setMusicResume(false); invalidate(); });
+
+        label(c, Lang.t("GELUID", "SOUND"), x0, 508, AMB);
+        button(c, x0, 522, x0 + bw, 582, Lang.t("EQUALIZER / BALANS", "EQUALIZER / BALANCE"), false, host::eq);
     }
 
     // ---------------------------------------------------------------- SYSTEEM

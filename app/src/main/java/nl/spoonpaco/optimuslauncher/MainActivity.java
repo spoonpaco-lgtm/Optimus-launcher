@@ -120,13 +120,7 @@ public class MainActivity extends Activity {
             toast(Lang.t("Afspelen / pauze", "Play / pause"));
             return true;
         });
-        // EQ: geluidsinstellingen van FlyAudio
-        findViewById(R.id.btn_eq).setOnClickListener(v -> {
-            for (String pk : new String[]{"com.flyaudio.soundeffect", "com.flyaudio.service.dsp", "com.flyaudio.settings"}) {
-                if (installed(pk)) { launch(pk, "EQ"); return; }
-            }
-            toast(Lang.t("Geen EQ-app gevonden", "No EQ app found"));
-        });
+        findViewById(R.id.btn_music).setOnClickListener(v -> startActivity(new Intent(this, MusicActivity.class)));
 
         // Tik op de snelheid: zwevend snelheidsvenster aan/uit (boven Android Auto)
         speed.setOnClickListener(v -> toggleOverlay());
@@ -139,7 +133,6 @@ public class MainActivity extends Activity {
         });
 
         findViewById(R.id.btn_apps).setOnClickListener(v -> showApps());
-        findViewById(R.id.btn_fuel).setOnClickListener(v -> showFuelDialog());
         stTank.setOnClickListener(v -> showFuelDialog());
         findViewById(R.id.btn_menu).setOnClickListener(v -> showMenu());
         findViewById(R.id.btn_video).setOnClickListener(v -> startActivity(new Intent(this, VideoActivity.class)));
@@ -156,7 +149,7 @@ public class MainActivity extends Activity {
             return true;
         });
         // Lang indrukken op een icoon = naam tonen (behalve AA: dat is afspelen/pauze)
-        for (int id : new int[]{R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_video, R.id.btn_apps,
+        for (int id : new int[]{R.id.btn_music, R.id.btn_radio, R.id.btn_video, R.id.btn_apps,
                 R.id.btn_menu}) {
             findViewById(id).setOnLongClickListener(v -> { toast(String.valueOf(v.getContentDescription())); return true; });
         }
@@ -280,11 +273,19 @@ public class MainActivity extends Activity {
 
     private Theme theme = Theme.LED;
 
-    private static final int[] KEY_IDS = {R.id.btn_aa, R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel,
-            R.id.btn_trips, R.id.btn_video, R.id.btn_apps, R.id.btn_menu};
-    private static final String[] KEY_TEXT = {"AUTO", "FM", "EQ", "TANK", "RIT", "VIDEO", "APPS", "MENU"};
-    private static final int[] KEY_ICON = {R.drawable.ic_aa, R.drawable.ic_radio, R.drawable.ic_eq, R.drawable.ic_fuel,
-            R.drawable.ic_trip, R.drawable.ic_video, R.drawable.ic_apps, R.drawable.ic_menu};
+    /** EQ: geluidsinstellingen van FlyAudio (nu via menu Instellingen). */
+    void openEq() {
+        for (String pk : new String[]{"com.flyaudio.soundeffect", "com.flyaudio.service.dsp", "com.flyaudio.settings"}) {
+            if (installed(pk)) { launch(pk, "EQ"); return; }
+        }
+        toast(Lang.t("Geen EQ-app gevonden", "No EQ app found"));
+    }
+
+    private static final int[] KEY_IDS = {R.id.btn_aa, R.id.btn_music, R.id.btn_radio, R.id.btn_video,
+            R.id.btn_trips, R.id.btn_apps, R.id.btn_menu};
+    private static final String[] KEY_TEXT = {"AUTO", "MUZIEK", "FM", "VIDEO", "RIT", "APPS", "MENU"};
+    private static final int[] KEY_ICON = {R.drawable.ic_aa, R.drawable.ic_music, R.drawable.ic_radio, R.drawable.ic_video,
+            R.drawable.ic_trip, R.drawable.ic_apps, R.drawable.ic_menu};
 
     private ScannerView scanner;
 
@@ -385,6 +386,7 @@ public class MainActivity extends Activity {
             @Override public void setMusicResume(boolean on) { MusicPlayer.get(MainActivity.this).setResumeEnabled(on); }
             @Override public void update() { close(); Updater.check(act, true); }
             @Override public void debug() { close(); startActivity(new Intent(act, DebugActivity.class)); }
+            @Override public void eq() { close(); openEq(); }
             @Override public void androidSettings() {
                 close();
                 try {
@@ -912,8 +914,8 @@ public class MainActivity extends Activity {
             }
             case "key": case "longkey": {
                 String n = String.valueOf(in.getStringExtra("name"));
-                int[] ids = {R.id.btn_aa, R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_trips, R.id.btn_video, R.id.btn_apps, R.id.btn_menu};
-                String[] names = {"aa", "radio", "eq", "fuel", "trips", "video", "apps", "menu"};
+                int[] ids = {R.id.btn_aa, R.id.btn_music, R.id.btn_radio, R.id.btn_video, R.id.btn_trips, R.id.btn_apps, R.id.btn_menu};
+                String[] names = {"aa", "music", "radio", "video", "trips", "apps", "menu"};
                 for (int k = 0; k < names.length; k++) if (names[k].equals(n)) {
                     View v = findViewById(ids[k]);
                     if (cmd.equals("key")) v.performClick(); else v.performLongClick();
