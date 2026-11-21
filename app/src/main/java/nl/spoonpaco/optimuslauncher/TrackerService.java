@@ -317,7 +317,24 @@ public class TrackerService extends Service implements LocationListener {
         }, 300L);
     }
 
+    private long lastFlyRedirect = 0L;
+
     private void onCarSignal(String name, int v) {
+        if (name.equals("flylauncher")) {
+            // FlyAudio-launcher kwam naar voren: Optimus Launcher er direct weer overheen (max 1x per 3 s)
+            long el = android.os.SystemClock.elapsedRealtime();
+            if (el - lastFlyRedirect < 3000L) return;
+            lastFlyRedirect = el;
+            PowerLog.log("FlyAudio-launcher gestart -> Optimus Launcher naar voren");
+            ui.postDelayed(() -> {
+                try {
+                    Intent i = new Intent(this, MainActivity.class);
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                    startActivity(i);
+                } catch (Exception e) { PowerLog.log("terugschakelen mislukt: " + e.getMessage()); }
+            }, 300L);
+            return;
+        }
         // Scherm gaat echt aan (MCU zet de verlichting aan) na minstens 5 s uit -> opstartfilmpje.
         // Dit is het betrouwbaarste moment: de MCU houdt het scherm soms donker tot de motor draait.
         if (name.equals("scherm")) {

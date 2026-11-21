@@ -32,6 +32,12 @@ public final class CarSignals {
     /** true = regel is "interessant" (status veranderd) en mag in de log. */
     static boolean parse(String line) {
         try {
+            // FlyAudio start zijn eigen launcher (na wakker worden / HOME): melden zodat wij er overheen komen
+            if (line.contains("START u0") && line.contains("cmp=com.flyaudio.launcher/.FlyLauncher")) {
+                Listener l = listener;
+                if (l != null) l.onSignal("flylauncher", 1);
+                return true;
+            }
             // Scherm echt aan/uit (MCU bevestigt achtergrondverlichting) -> moment voor het opstartfilmpje
             int bl = line.indexOf("onScreenBackLightEnable ~: ");
             if (bl >= 0) return set("scherm", line.startsWith("true", bl + 27) ? 1 : 0);
