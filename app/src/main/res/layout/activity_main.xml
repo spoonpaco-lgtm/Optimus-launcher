@@ -123,7 +123,7 @@
         android:layout_marginTop="12dp"
         android:background="@drawable/key_tray"
         android:padding="6dp"
-        android:columnCount="9"
+        android:columnCount="10"
         android:rowCount="1"
         android:alignmentMode="alignBounds"
         android:useDefaultMargins="false">
@@ -133,6 +133,7 @@
         <ImageButton android:id="@+id/btn_eq" style="@style/Tile" android:src="@drawable/ic_eq" android:contentDescription="@string/eq" />
         <ImageButton android:id="@+id/btn_fuel" style="@style/Tile" android:src="@drawable/ic_fuel" android:contentDescription="@string/fuel" />
         <ImageButton android:id="@+id/btn_trips" style="@style/Tile" android:src="@drawable/ic_trip" android:contentDescription="Ritten" />
+        <ImageButton android:id="@+id/btn_video" style="@style/Tile" android:src="@drawable/ic_video" android:contentDescription="Video" />
         <ImageButton android:id="@+id/btn_apps" style="@style/Tile" android:src="@drawable/ic_apps" android:contentDescription="@string/apps" />
         <ImageButton android:id="@+id/btn_settings" style="@style/Tile" android:src="@drawable/ic_settings" android:contentDescription="@string/settings" />
         <ImageButton android:id="@+id/btn_menu" style="@style/Tile" android:src="@drawable/ic_menu" android:contentDescription="Menu" />

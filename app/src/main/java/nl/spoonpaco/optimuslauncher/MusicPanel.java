@@ -244,14 +244,6 @@ public class MusicPanel extends View {
             pt.uiButton(c, rs, Lang.t("STICK OPNIEUW LEZEN", "RESCAN STICK"), false, key, 13);
             hit(rs, mp::scan);
         }
-        RectF vb = new RectF(X + 540, H - 70, 1216, H - 20);
-        pt.uiButton(c, vb, "VIDEO", false, key, 15);
-        hit(vb, () -> {
-            android.content.Intent in = new android.content.Intent(getContext(), VideoActivity.class);
-            in.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            getContext().startActivity(in);
-            if (floating) host.close();
-        });
     }
 
     /** Indeling per tabblad: welke niveaus je doorklikt voordat je bij de nummers komt. */

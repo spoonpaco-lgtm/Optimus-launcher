@@ -151,6 +151,7 @@ public class MainActivity extends Activity {
             }
         });
         findViewById(R.id.btn_menu).setOnClickListener(v -> showMenu());
+        findViewById(R.id.btn_video).setOnClickListener(v -> startActivity(new Intent(this, VideoActivity.class)));
         // RIT: kort = deze rit is een werkrit (gaat na de rit vanzelf uit), lang = rittenscherm
         findViewById(R.id.btn_trips).setOnClickListener(v -> {
             boolean on = !WorkLog.flag(this);
@@ -164,7 +165,7 @@ public class MainActivity extends Activity {
             return true;
         });
         // Lang indrukken op een icoon = naam tonen (behalve AA: dat is afspelen/pauze)
-        for (int id : new int[]{R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_apps,
+        for (int id : new int[]{R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_video, R.id.btn_apps,
                 R.id.btn_settings, R.id.btn_menu}) {
             findViewById(id).setOnLongClickListener(v -> { toast(String.valueOf(v.getContentDescription())); return true; });
         }
@@ -289,10 +290,10 @@ public class MainActivity extends Activity {
     private Theme theme = Theme.LED;
 
     private static final int[] KEY_IDS = {R.id.btn_aa, R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel,
-            R.id.btn_trips, R.id.btn_apps, R.id.btn_settings, R.id.btn_menu};
-    private static final String[] KEY_TEXT = {"AUTO", "FM", "EQ", "TANK", "RIT", "APPS", "SET", "MENU"};
+            R.id.btn_trips, R.id.btn_video, R.id.btn_apps, R.id.btn_settings, R.id.btn_menu};
+    private static final String[] KEY_TEXT = {"AUTO", "FM", "EQ", "TANK", "RIT", "VIDEO", "APPS", "SET", "MENU"};
     private static final int[] KEY_ICON = {R.drawable.ic_aa, R.drawable.ic_radio, R.drawable.ic_eq, R.drawable.ic_fuel,
-            R.drawable.ic_trip, R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_menu};
+            R.drawable.ic_trip, R.drawable.ic_video, R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_menu};
 
     private ScannerView scanner;
 
@@ -912,8 +913,8 @@ public class MainActivity extends Activity {
             }
             case "key": case "longkey": {
                 String n = String.valueOf(in.getStringExtra("name"));
-                int[] ids = {R.id.btn_aa, R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_trips, R.id.btn_apps, R.id.btn_settings, R.id.btn_menu};
-                String[] names = {"aa", "radio", "eq", "fuel", "trips", "apps", "settings", "menu"};
+                int[] ids = {R.id.btn_aa, R.id.btn_radio, R.id.btn_eq, R.id.btn_fuel, R.id.btn_trips, R.id.btn_video, R.id.btn_apps, R.id.btn_settings, R.id.btn_menu};
+                String[] names = {"aa", "radio", "eq", "fuel", "trips", "video", "apps", "settings", "menu"};
                 for (int k = 0; k < names.length; k++) if (names[k].equals(n)) {
                     View v = findViewById(ids[k]);
                     if (cmd.equals("key")) v.performClick(); else v.performLongClick();

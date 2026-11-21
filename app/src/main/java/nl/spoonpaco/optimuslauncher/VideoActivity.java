@@ -40,6 +40,9 @@ public class VideoActivity extends Activity {
     private final Handler h = new Handler(Looper.getMainLooper());
     private Panel panel;
     private TextureView tex;
+    private SubView subView;
+    private Subtitles subs;
+    private long subOffset;   // ms; positief = ondertitels later
     private MediaPlayer mp;
     private Surface surface;
     private File current;
@@ -59,6 +62,8 @@ public class VideoActivity extends Activity {
         tex = new TextureView(this);
         root.addView(panel, new FrameLayout.LayoutParams(-1, -1));
         root.addView(tex, new FrameLayout.LayoutParams(1, 1));
+        subView = new SubView(this);
+        root.addView(subView, new FrameLayout.LayoutParams(1, 1));
         setContentView(root);
         tex.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
             @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int hh) {
@@ -88,6 +93,7 @@ public class VideoActivity extends Activity {
     @Override protected void onDestroy() { super.onDestroy(); release(); }
     @Override public void onBackPressed() {
         if (full) { full = false; layoutVideo(); return; }
+        if (panel.subMode) { panel.subMode = false; panel.invalidate(); return; }
         if (panel.folder != null) { panel.folder = null; panel.scroll = 0; panel.invalidate(); return; }
         super.onBackPressed();
     }
@@ -132,6 +138,7 @@ public class VideoActivity extends Activity {
         if (am != null) am.requestAudioFocus(focus, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
         mp = new MediaPlayer();
         prepared = false;
+        loadSubs(f);
         try {
             mp.setAudioStreamType(AudioManager.STREAM_MUSIC);
             mp.setDataSource(f.getAbsolutePath());
@@ -199,7 +206,8 @@ public class VideoActivity extends Activity {
             }
             if (now - lastSave > 5000) { lastSave = now; if (playing()) savePos(); }
             panel.invalidate();
-            h.postDelayed(this, 500);
+            subView.invalidate();
+            h.postDelayed(this, 250);
         }
     };
 
@@ -220,7 +228,70 @@ public class VideoActivity extends Activity {
         lp.leftMargin = Math.round(box.left + (bw - w) / 2); lp.topMargin = Math.round(box.top + (bh - hh) / 2);
         tex.setLayoutParams(lp);
         tex.setVisibility(current != null && !blocked ? View.VISIBLE : View.INVISIBLE);
+        subView.setLayoutParams(new FrameLayout.LayoutParams(lp));
+        subView.setVisibility(tex.getVisibility());
         panel.invalidate();
+    }
+
+    // ---------------------------------------------------------------- ondertitels
+
+    /** Gekozen ondertitel (of automatisch het bestand met dezelfde naam) + opgeslagen sync laden. */
+    private void loadSubs(File f) {
+        subs = null;
+        String choice = prefs.getString("s:" + f.getAbsolutePath(), null);
+        subOffset = prefs.getLong("o:" + f.getAbsolutePath(), 0);
+        if ("-".equals(choice)) return;
+        File sf = null;
+        if (choice != null && new File(choice).exists()) sf = new File(choice);
+        else {
+            String base = f.getName().replaceAll("\\.[^.]+$", "").toLowerCase(Locale.ROOT);
+            for (File c : Subtitles.candidates(f)) if (c.getName().toLowerCase(Locale.ROOT).startsWith(base)) { sf = c; break; }
+        }
+        if (sf != null) {
+            subs = Subtitles.load(sf);
+            CarLogger.note("video: ondertitel " + sf.getName() + " (" + subs.times.size() + " regels)");
+        }
+    }
+
+    private void chooseSubs(File sf) {
+        if (current == null) return;
+        prefs.edit().putString("s:" + current.getAbsolutePath(), sf == null ? "-" : sf.getAbsolutePath()).apply();
+        subs = sf == null ? null : Subtitles.load(sf);
+        subView.invalidate();
+    }
+
+    private void shiftSubs(long delta) {
+        if (current == null) return;
+        subOffset = delta == 0 ? 0 : subOffset + delta;
+        prefs.edit().putLong("o:" + current.getAbsolutePath(), subOffset).apply();
+        subView.invalidate();
+    }
+
+    /** Tekst over het beeld: wit met zwarte rand, onderaan gecentreerd. */
+    private class SubView extends View {
+        private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG), edge = new Paint(Paint.ANTI_ALIAS_FLAG);
+        SubView(Context c) {
+            super(c);
+            setClickable(false); setFocusable(false);
+            fill.setColor(0xFFFFFFFF); fill.setTextAlign(Paint.Align.CENTER); fill.setFakeBoldText(true);
+            edge.setColor(0xFF000000); edge.setTextAlign(Paint.Align.CENTER); edge.setFakeBoldText(true);
+            edge.setStyle(Paint.Style.STROKE); edge.setStrokeJoin(Paint.Join.ROUND);
+        }
+        @Override public boolean onTouchEvent(MotionEvent e) { return false; }
+        @Override protected void onDraw(Canvas c) {
+            if (subs == null || blocked || !prepared) return;
+            String t = subs.at(pos() - subOffset);
+            if (t == null) return;
+            float size = Math.max(14f, getHeight() * (full ? 0.055f : 0.065f));
+            fill.setTextSize(size); edge.setTextSize(size); edge.setStrokeWidth(size * 0.16f);
+            String[] lines = t.split("\n");
+            float y = getHeight() - size * 0.6f - (lines.length - 1) * size * 1.2f;
+            for (String l : lines) {
+                c.drawText(l, getWidth() / 2f, y, edge);
+                c.drawText(l, getWidth() / 2f, y, fill);
+                y += size * 1.2f;
+            }
+        }
     }
 
     // ---------------------------------------------------------------- scherm
@@ -229,6 +300,8 @@ public class VideoActivity extends Activity {
         private final CockpitView pt; private final Theme theme;
         private float s = 1f, H = 650f, scroll, downY, lastY; private boolean dragging;
         String folder = null, error = "";
+        boolean subMode = false;
+        private File candFor; private List<File> cand = new ArrayList<>();
         final RectF video = new RectF(436, 22, 1218, 462);
         private final RectF list = new RectF(18, 84, 402, 0);
         private float upX;
@@ -259,6 +332,28 @@ public class VideoActivity extends Activity {
             return true;
         }
 
+        /** Sync-blok: verschuif de ondertitels in stappen; wordt per video bewaard. */
+        private void drawSync(Canvas c, int key, int AMB) {
+            float top = list.bottom + 12;
+            RectF w = new RectF(18, top, 402, top + 70);
+            pt.uiWindow(c, w, AMB);
+            pt.uiText(c, "SYNC", w.left + 16, w.top + 26, 13, 0xFFD8B070, Paint.Align.LEFT);
+            String v = String.format(Locale.US, "%+.1f S", subOffset / 1000f);
+            pt.uiText(c, v, w.right - 16, w.top + 44, 26, AMB, Paint.Align.RIGHT);
+            pt.uiText(c, subOffset > 0 ? Lang.t("TEKST LATER", "TEXT LATER") : subOffset < 0 ? Lang.t("TEKST EERDER", "TEXT EARLIER") : Lang.t("ORIGINEEL", "ORIGINAL"),
+                    w.left + 16, w.top + 54, 12, 0xFFD8B070, Paint.Align.LEFT);
+            pt.uiGlass(c, w);
+            String[] lab = {"-5", "-0.5", "+0.5", "+5", "0"};
+            long[] d = {-5000, -500, 500, 5000, 0};
+            float gap = 7, bw = (384 - 4 * gap) / 5f, by = w.bottom + 12;
+            for (int i = 0; i < 5; i++) {
+                final long dd = d[i];
+                RectF r = new RectF(18 + i * (bw + gap), by, 18 + i * (bw + gap) + bw, by + 90);
+                pt.uiKey(c, r, lab[i], false, key, 20);
+                hit(r, () -> shiftSubs(dd));
+            }
+        }
+
         @Override protected void onDraw(Canvas c) {
             hits.clear();
             c.save(); c.scale(s, s);
@@ -272,7 +367,20 @@ public class VideoActivity extends Activity {
             pt.uiLamp(c, 330, 44, 8, pt.uiGrn(), scannedRoot != null);
             pt.uiText(c, "USB", 344, 49, 13, scannedRoot != null ? pt.uiGrn() : 0xFF6C6C78, Paint.Align.LEFT);
             List<Object[]> rows = new ArrayList<>();
-            if (folder == null) {
+            list.bottom = subMode ? H - 18 - 196 : H - 18;
+            if (subMode) {
+                rows.add(new Object[]{"< " + Lang.t("TERUG", "BACK"), Lang.t("ONDERTITEL KIEZEN", "CHOOSE SUBTITLES"), (Runnable) () -> { subMode = false; scroll = 0; }, false});
+                if (current == null) rows.add(new Object[]{Lang.t("EERST EEN VIDEO KIEZEN", "PICK A VIDEO FIRST"), "", (Runnable) () -> { }, false});
+                else {
+                    rows.add(new Object[]{Lang.t("GEEN ONDERTITEL", "NO SUBTITLES"), "", (Runnable) () -> chooseSubs(null), subs == null});
+                    if (candFor != current) { candFor = current; cand = Subtitles.candidates(current); }
+                    for (final File sf : cand)
+                        rows.add(new Object[]{sf.getName(), String.format(Locale.US, "%.0f KB", sf.length() / 1024f), (Runnable) () -> chooseSubs(sf),
+                                subs != null && subs.file.equals(sf)});
+                    if (cand.isEmpty())
+                        rows.add(new Object[]{Lang.t("GEEN .SRT / .VTT IN DEZE MAP", "NO .SRT / .VTT IN THIS FOLDER"), Lang.t("ZET HET BESTAND NAAST DE VIDEO", "PUT THE FILE NEXT TO THE VIDEO"), (Runnable) () -> { }, false});
+                }
+            } else if (folder == null) {
                 TreeMap<String, Integer> folders = new TreeMap<>(MusicPlayer.SMART);
                 for (File f : videos) { File p = f.getParentFile(); String n = p == null ? "/" : p.getName(); folders.merge(n, 1, Integer::sum); }
                 String last = prefs.getString("last", null);
@@ -316,6 +424,7 @@ public class VideoActivity extends Activity {
                 if (hr.height() > 10) hit(hr, (Runnable) rows.get(i)[2]);
             }
             c.restore();
+            if (subMode) drawSync(c, key, AMB);
             if (rows.isEmpty()) pt.uiText(c, scanning ? Lang.t("STICK WORDT GELEZEN...", "READING STICK...") : Lang.t("GEEN VIDEO'S GEVONDEN", "NO VIDEOS FOUND"),
                     list.left + 10, list.top + 40, 15, 0xFF8E8E9A, Paint.Align.LEFT);
 
@@ -352,14 +461,15 @@ public class VideoActivity extends Activity {
             float by = info.bottom + 14, bh = Math.min(70, H - 18 - by);
             float gap = 10, bw = (video.width() - 5 * gap) / 6f;
             String[] lab = {"-10 S", playing() ? Lang.t("PAUZE", "PAUSE") : Lang.t("SPEEL", "PLAY"), "+30 S",
-                    Lang.t("GROOT", "FULL"), Lang.t("MUZIEK", "MUSIC"), Lang.t("SLUITEN", "CLOSE")};
+                    Lang.t("GROOT", "FULL"), Lang.t("ONDERTITEL", "SUBTITLES"), Lang.t("SLUITEN", "CLOSE")};
             Runnable[] act = {() -> seekBy(-10_000), VideoActivity.this::togglePlay, () -> seekBy(30_000),
                     () -> { if (current != null && !blocked) { full = true; layoutVideo(); } },
-                    () -> { savePos(); pause(); startActivity(new android.content.Intent(VideoActivity.this, MusicActivity.class)); finish(); },
+                    () -> { subMode = !subMode; scroll = 0; candFor = null; },
                     VideoActivity.this::finish};
             for (int i = 0; i < 6; i++) {
                 RectF r = new RectF(video.left + i * (bw + gap), by, video.left + i * (bw + gap) + bw, by + bh);
-                pt.uiButton(c, r, lab[i], (i == 1 && playing()) || i == 5, key, 13);
+                boolean on = (i == 1 && playing()) || i == 5 || (i == 4 && (subs != null || subMode));
+                pt.uiButton(c, r, lab[i], on, key, i == 4 ? 11 : 13);
                 hit(r, act[i]);
             }
             c.restore();
