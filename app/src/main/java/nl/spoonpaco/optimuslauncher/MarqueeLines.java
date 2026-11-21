@@ -23,7 +23,7 @@ final class MarqueeLines extends View {
         super(c);
         setLayerType(LAYER_TYPE_SOFTWARE, null);
         setClickable(false); setFocusable(false);
-        pt = new CockpitView(c, null); pt.setTheme(t);
+        pt = new CockpitView(c, null); pt.setTheme(t); theme = t;
         u = unit;
     }
 
@@ -39,7 +39,15 @@ final class MarqueeLines extends View {
         n = Math.max(n, i + 1);
     }
 
-    void clear() { for (int i = 0; i < n; i++) txt[i] = ""; n = 0; invalidate(); }
+    void clear() { if (n == 0) return; for (int i = 0; i < n; i++) txt[i] = ""; n = 0; invalidate(); }
+
+    /** Ander thema (letters/lettertype van het thema). */
+    void setTheme(Theme t) { if (t != null && t != theme) { theme = t; pt.setTheme(t); invalidate(); } }
+    private Theme theme;
+    /** Scanlines over de tekst tekenen (als het vlak op een cockpitvenster ligt). */
+    boolean scanlines = false;
+    void leds(boolean ledTheme) { boolean sc = !ledTheme; if (sc != scanlines) { scanlines = sc; invalidate(); } }
+    private final Paint sp = new Paint();
 
     @Override protected void onDraw(Canvas c) {
         if (getWidth() == 0) return;
@@ -66,6 +74,11 @@ final class MarqueeLines extends View {
                 moving = true;
             }
             c.restore();
+        }
+        if (scanlines) {   // zelfde scanlines als het glas van de cockpit eronder
+            sp.setColor(0x4D000000);
+            float hh = getHeight() / u;
+            for (float y = 3; y < hh - 2; y += 3) c.drawRect(0, y, W, y + 1, sp);
         }
         c.restore();
         if (moving) postInvalidateDelayed(50);

@@ -132,7 +132,7 @@ public final class InputForm {
         private boolean toggle; private int sel = 0; private boolean fresh = true;
         private String error = ""; private String pressed = ""; private long pressedAt;
         private float s = 1f, H = 600f;
-        String altLabel; Runnable alt;
+        String altLabel; Runnable alt; private long altArmedAt;
         private final List<Object[]> hits = new ArrayList<>();
 
         FormView(Context c, Theme t, String title, String sub, Field[] f, String toggleLabel, boolean toggleOn,
@@ -224,7 +224,7 @@ public final class InputForm {
                 hit(new RectF(w.left, y, w.right, w.bottom), () -> { sel = idx; fresh = true; error = ""; });
                 y += fh;
             }
-            if (fields.length > 0) postInvalidateDelayed(500);
+            if (fields.length > 0) postInvalidateDelayed(500, 0, 0, Math.round(720 * s), Math.round(y * s));   // alleen de velden (cursor)
 
             // ---- aan/uit-knop ----
             if (toggleLabel != null) {
@@ -289,9 +289,14 @@ public final class InputForm {
             int n = alt != null ? 3 : 2;
             float bw = (kx1 - kx0 - (n - 1) * gap) / n;
             if (alt != null) {
+                // verwijderen e.d.: eerst bevestigen (tweede tik binnen 3 s), zodat een mistik niets weggooit
                 RectF ar = new RectF(kx0, by, kx0 + bw, by + bottomH);
-                pt.uiButton(c, ar, altLabel, false, pt.uiRed(), 13);
-                hit(ar, alt);
+                boolean armed = System.currentTimeMillis() - altArmedAt < 3000;
+                pt.uiButton(c, ar, armed ? Lang.t("ZEKER? TIK NOG 1X", "SURE? TAP AGAIN") : altLabel, armed, pt.uiRed(), armed ? 11 : 13);
+                hit(ar, () -> {
+                    if (System.currentTimeMillis() - altArmedAt < 3000) { altArmedAt = 0; alt.run(); }
+                    else { altArmedAt = System.currentTimeMillis(); postInvalidateDelayed(3100); }
+                });
                 kx0 += bw + gap;
             }
             RectF cancel = new RectF(kx0, by, kx0 + bw, by + bottomH);

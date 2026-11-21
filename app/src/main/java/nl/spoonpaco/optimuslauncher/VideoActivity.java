@@ -196,17 +196,27 @@ public class VideoActivity extends Activity {
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             // stilstand-blokkade
+            // Veilig bij twijfel: zonder verse GPS (tunnel, garage) blijft het beeld uit als je laatst reed.
+            // Beeld komt alleen terug bij bevestigde stilstand: GPS onder 2 km/h, of contact uit.
             float v = TrackerService.speedKmh;
-            boolean fresh = System.currentTimeMillis() - TrackerService.lastFixTime < 5000;
             long now = System.currentTimeMillis();
-            if (fresh && v > MOVING) { if (!blocked) { blocked = true; full = false; CarLogger.note("video: beeld uit (rijdt " + Math.round(v) + " km/h)"); layoutVideo(); } stoppedSince = 0; }
-            else if (blocked && (!fresh || v < STOPPED)) {
+            long age = now - TrackerService.lastFixTime;
+            boolean fresh = age < 5000;
+            boolean contactOff = CarSignals.contact == 0;
+            boolean lastMoving = TrackerService.lastFixTime > 0 && age < 30 * 60_000L && v > MOVING;
+            if (!contactOff && ((fresh && v > MOVING) || (!fresh && lastMoving))) {
+                if (!blocked) { blocked = true; full = false; CarLogger.note("video: beeld uit (" + (fresh ? "rijdt " + Math.round(v) + " km/h" : "geen GPS, laatst rijdend") + ")"); layoutVideo(); }
+                stoppedSince = 0;
+            } else if (blocked && (contactOff || (fresh && v < STOPPED))) {
                 if (stoppedSince == 0) stoppedSince = now;
                 if (now - stoppedSince > 2000) { blocked = false; layoutVideo(); }
-            }
+            } else if (blocked) stoppedSince = 0;
             if (now - lastSave > 5000) { lastSave = now; if (playing()) savePos(); }
-            panel.invalidate();
-            subView.invalidate();
+            // alleen tijd/voortgang/knoppen (en bij de blokkade het beeldvak) opnieuw tekenen, niet het hele scherm
+            float sc = panel.getWidth() / 1240f;
+            float top = blocked ? panel.video.top : panel.video.bottom;
+            panel.invalidate(Math.round(panel.video.left * sc) - 2, Math.round(top * sc) - 2, panel.getWidth(), panel.getHeight());
+            if (subs != null) subView.invalidate();
             h.postDelayed(this, 250);
         }
     };
@@ -231,6 +241,14 @@ public class VideoActivity extends Activity {
         subView.setLayoutParams(new FrameLayout.LayoutParams(lp));
         subView.setVisibility(tex.getVisibility());
         panel.invalidate();
+    }
+
+    /** Mapnaam; komt die naam vaker voor, dan de bovenliggende map erbij ("Serie / Seizoen 1"). */
+    private static String folderLabel(String path, java.util.Map<String, Integer> names) {
+        File f = new File(path);
+        Integer k = names.get(f.getName());
+        if (k != null && k > 1 && f.getParentFile() != null) return f.getParentFile().getName() + " / " + f.getName();
+        return f.getName();
     }
 
     // ---------------------------------------------------------------- ondertitels
@@ -386,8 +404,10 @@ public class VideoActivity extends Activity {
                         rows.add(new Object[]{Lang.t("GEEN .SRT / .VTT IN DEZE MAP", "NO .SRT / .VTT IN THIS FOLDER"), Lang.t("ZET HET BESTAND NAAST DE VIDEO", "PUT THE FILE NEXT TO THE VIDEO"), (Runnable) () -> { }, false});
                 }
             } else if (folder == null) {
-                TreeMap<String, Integer> folders = new TreeMap<>(MusicPlayer.SMART);
-                for (File f : videos) { File p = f.getParentFile(); String n = p == null ? "/" : p.getName(); folders.merge(n, 1, Integer::sum); }
+                // per map (volledig pad), zodat twee mappen "Seizoen 1" van verschillende series apart blijven
+                TreeMap<String, Integer> folders = new TreeMap<>((a, b) -> { int k = MusicPlayer.SMART.compare(new File(a).getName(), new File(b).getName()); return k != 0 ? k : a.compareTo(b); });
+                java.util.Map<String, Integer> names = new java.util.HashMap<>();
+                for (File f : videos) { File p = f.getParentFile(); String n = p == null ? "/" : p.getAbsolutePath(); if (folders.merge(n, 1, Integer::sum) == 1) names.merge(new File(n).getName(), 1, Integer::sum); }
                 String last = prefs.getString("last", null);
                 if (last != null && new File(last).exists()) {
                     final File lf = new File(last);
@@ -395,13 +415,13 @@ public class VideoActivity extends Activity {
                 }
                 for (java.util.Map.Entry<String, Integer> e : folders.entrySet()) {
                     final String n = e.getKey();
-                    rows.add(new Object[]{n, e.getValue() + (e.getValue() == 1 ? " VIDEO" : Lang.t(" VIDEO'S", " VIDEOS")), (Runnable) () -> { folder = n; scroll = 0; }, current != null && current.getParentFile() != null && current.getParentFile().getName().equals(n)});
+                    rows.add(new Object[]{folderLabel(n, names), e.getValue() + (e.getValue() == 1 ? " VIDEO" : Lang.t(" VIDEO'S", " VIDEOS")), (Runnable) () -> { folder = n; scroll = 0; }, current != null && current.getParentFile() != null && current.getParentFile().getAbsolutePath().equals(n)});
                 }
             } else {
-                rows.add(new Object[]{"< " + Lang.t("TERUG", "BACK"), folder, (Runnable) () -> { folder = null; scroll = 0; }, false});
+                rows.add(new Object[]{"< " + Lang.t("TERUG", "BACK"), new File(folder).getName(), (Runnable) () -> { folder = null; scroll = 0; }, false});
                 for (final File f : videos) {
                     File p = f.getParentFile();
-                    if (p == null || !p.getName().equals(folder)) continue;
+                    if (p == null || !p.getAbsolutePath().equals(folder)) continue;
                     int at = prefs.getInt(key(f), 0);
                     String sub = String.format(Locale.US, "%.0f MB", f.length() / 1048576f) + (at > 5000 ? Lang.t("  ·  VERDER OP ", "  ·  RESUME AT ") + MusicPlayer.time(at) : "");
                     rows.add(new Object[]{f.getName().replaceAll("\\.[^.]+$", ""), sub, (Runnable) () -> play(f), f.equals(current)});

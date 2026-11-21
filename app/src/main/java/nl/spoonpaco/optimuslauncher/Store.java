@@ -91,7 +91,14 @@ public class Store {
      * Tankbeurt invoeren. Bij "vol" wordt de kalibratie bijgesteld
      * als er sinds de vorige volle tank genoeg gereden is.
      */
-    public void fill(float liters, float pricePerLiter, boolean full) {
+    public void fill(float liters, float pricePerLiter, boolean full) { fill(liters, pricePerLiter, full, -1); }
+
+    /**
+     * Met kilometerstand van de teller (of -1): bij twee volle tanks met een tellerstand rekent de
+     * kalibratie met de echte km in plaats van de GPS-km (de GPS mist het begin van elke rit).
+     */
+    public void fill(float liters, float pricePerLiter, boolean full, int odo) {
+        if (odo > 0) setOdometer(odo);   // tellerstand is de echte stand: GPS-schatting gelijkzetten
         SharedPreferences.Editor e = p.edit();
         if (pricePerLiter > 0) e.putFloat("price", pricePerLiter);
 
@@ -101,21 +108,29 @@ public class Store {
             boolean hadFull = p.getBoolean("hadFull", false);
             float km = p.getFloat("kmSinceFull", 0f);
             float est = p.getFloat("estSinceFull", 0f);
-            if (hadFull && km >= 100f && est > 0.5f && addedSinceFull > 0.5f) {
+            int odoPrev = p.getInt("odoAtFull", -1);
+            float realKm = odo > 0 && odoPrev > 0 ? odo - odoPrev : -1f;
+            boolean useReal = realKm >= 100f && realKm <= 3000f && km >= 50f;
+            if (hadFull && (useReal || km >= 100f) && est > 0.5f && addedSinceFull > 0.5f) {
                 float old = calFactor();
-                float factor = Math.max(0.6f, Math.min(1.6f, old * (addedSinceFull / est)));
+                // geschat per GPS-km vs echt per echte km (zonder tellerstand: GPS-km voor allebei)
+                float ratio = useReal ? (addedSinceFull / realKm) / (est / km) : addedSinceFull / est;
+                float factor = Math.max(0.6f, Math.min(1.6f, old * ratio));
                 int n = p.getInt("calCount", 0);
                 // eerste echte meting: in één keer overnemen; daarna rustig bijsturen (half oud, half nieuw)
                 float nw = n == 0 ? factor : (old + factor) / 2f;
                 e.putFloat("cal", nw).putInt("calCount", n + 1)
-                 .putFloat("calEst", est).putFloat("calAdded", addedSinceFull).putFloat("calKm", km)
-                 .putFloat("calOld", old).putLong("calDate", System.currentTimeMillis());
+                 .putFloat("calEst", useReal ? est * realKm / km : est).putFloat("calAdded", addedSinceFull).putFloat("calKm", useReal ? realKm : km)
+                 .putFloat("calOld", old).putLong("calDate", System.currentTimeMillis()).putBoolean("calReal", useReal);
                 CarLogger.note(String.format(java.util.Locale.US,
-                        "kalibratie: %.0f km, geschat %.1f l, getankt %.1f l -> factor %.3f -> %.3f (%.1f km/l echt)",
-                        km, est, addedSinceFull, old, nw, km / addedSinceFull));
+                        "kalibratie: %.0f km %s (GPS %.0f km), geschat %.1f l, getankt %.1f l -> factor %.3f -> %.3f (%.1f km/l echt)",
+                        useReal ? realKm : km, useReal ? "volgens teller" : "volgens GPS", km, est, addedSinceFull, old, nw,
+                        (useReal ? realKm : km) / addedSinceFull));
             } else if (hadFull) {
-                CarLogger.note(String.format(java.util.Locale.US, "kalibratie overgeslagen: %.0f km sinds vorige volle tank (min. 100)", km));
+                CarLogger.note(String.format(java.util.Locale.US, "kalibratie overgeslagen: %.0f km sinds vorige volle tank (min. 100), getankt %.1f l",
+                        useReal ? realKm : km, addedSinceFull));
             }
+            e.putInt("odoAtFull", odo > 0 ? odo : -1);
             e.putFloat("tank", TANK_LITERS);
             e.putBoolean("hadFull", true);
             e.putFloat("kmSinceFull", 0f);

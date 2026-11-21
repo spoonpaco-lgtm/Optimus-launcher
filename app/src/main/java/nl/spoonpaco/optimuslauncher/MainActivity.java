@@ -51,13 +51,10 @@ public class MainActivity extends Activity {
 
     private static boolean updateCheckedThisRun = false;
 
-    private TextView clock, date, speed, trip;
-    private TextView stNet, stGps, stPhone, stLog, stTank;
+    private TextView clock, speed;   // verborgen oude weergave; alleen nog voor tik/lang indrukken
     private Store store;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", NL);
-    private final SimpleDateFormat dateFmt = new SimpleDateFormat("EEEE d MMMM", Lang.locale());
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -74,16 +71,15 @@ public class MainActivity extends Activity {
         store = new Store(this);
 
         clock = findViewById(R.id.clock);
-        date = findViewById(R.id.date);
         speed = findViewById(R.id.speed);
-        trip = findViewById(R.id.trip);
-        stNet = findViewById(R.id.st_net);
-        stGps = findViewById(R.id.st_gps);
-        stPhone = findViewById(R.id.st_phone);
-        stLog = findViewById(R.id.st_log);
-        stTank = findViewById(R.id.st_tank);
         cockpit = findViewById(R.id.cockpit);
         applyTheme(Theme.byId(getSharedPreferences("optimus", MODE_PRIVATE).getString("theme", "led")));
+        // lopende titel op de band in een eigen klein vlak (de cockpit wordt dan niet steeds helemaal hertekend)
+        if (cockpit.getParent() instanceof android.widget.FrameLayout) {
+            MarqueeLines band = new MarqueeLines(this, theme, 1f);
+            ((android.widget.FrameLayout) cockpit.getParent()).addView(band, new android.widget.FrameLayout.LayoutParams(1, 1));
+            cockpit.bandText = band;
+        }
         handler.postDelayed(() -> { if (scanner != null) scanner.sweepOnce(); }, 600);
         instance = this;
         handleMenuExtra(getIntent());
@@ -133,7 +129,6 @@ public class MainActivity extends Activity {
         });
 
         findViewById(R.id.btn_apps).setOnClickListener(v -> showApps());
-        stTank.setOnClickListener(v -> showFuelDialog());
         findViewById(R.id.btn_menu).setOnClickListener(v -> showMenu());
         findViewById(R.id.btn_video).setOnClickListener(v -> startActivity(new Intent(this, VideoActivity.class)));
         // RIT: kort = deze rit is een werkrit (gaat na de rit vanzelf uit), lang = rittenscherm
@@ -219,54 +214,12 @@ public class MainActivity extends Activity {
     }
 
     private void refresh() {
-        Date now = new Date(Clock.now());
-        clock.setText(timeFmt.format(now));
-        date.setText(capitalize(dateFmt.format(now)));
-
+        // (de oude tekst-statusbalk is verborgen; alles staat in de cockpit)
         boolean fresh = System.currentTimeMillis() - TrackerService.lastFixTime < 3000
                 && TrackerService.speedKmh >= 0;
-        speed.setText(fresh ? String.valueOf(Math.round(TrackerService.speedKmh)) : "--");
-
-        refreshStatus(fresh);
-        refreshTrip();
         refreshCockpit(fresh);
         maybeShowSummary();
         updateOfflineButton();
-    }
-
-    private void refreshStatus(boolean gpsFresh) {
-        // Internet
-        int net = netState();
-        setStatus(stNet, net == 2 ? R.color.ok : net == 1 ? R.color.warn : R.color.bad,
-                net == 1 ? "● Internet (geen data)" : "● Internet");
-
-        // GPS
-        boolean perm = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED;
-        if (!TrackerService.gpsPresent) setStatus(stGps, R.color.bad, "● Geen GPS");
-        else if (!perm) setStatus(stGps, R.color.bad, "● GPS (geen toestemming)");
-        else if (gpsFresh) setStatus(stGps, R.color.ok, "● GPS");
-        else setStatus(stGps, R.color.warn, "● GPS zoekt");
-
-        // Telefoon via Bluetooth
-        int bt = btState();
-        setStatus(stPhone, bt == 2 ? R.color.ok : bt == 1 ? R.color.bad : R.color.off,
-                bt == 0 ? "● Telefoon ?" : "● Telefoon");
-
-
-        // Autolog
-        int lg = CarLogger.state;
-        setStatus(stLog, lg == 2 ? R.color.ok : lg == 1 ? R.color.warn : R.color.off,
-                lg == 1 ? "● Autolog (alleen GPS)" : "● Autolog");
-
-        // Tank
-        int range = store.rangeKm();
-        if (range < 0) {
-            setStatus(stTank, R.color.warn, "⛽ tank ? (tik)");
-        } else {
-            int col = range < 60 ? R.color.bad : range < 120 ? R.color.warn : R.color.fg_dim;
-            setStatus(stTank, col, String.format(NL, "⛽ ~%d km  (%.0f l)", range, store.tankLiters()));
-        }
     }
 
     // ---------- menu + thema's ----------
@@ -290,6 +243,8 @@ public class MainActivity extends Activity {
     private void askWorkTrip() {
         long id = WorkLog.pendingAsk(this);
         if (id == 0 || !visible) return;
+        // eerst de RIT KLAAR-kaart wegtikken, dan pas de vraag (niet twee vensters over elkaar)
+        if (store.summaryPending() || (summaryDialog != null && summaryDialog.isShowing())) return;
         boolean fresh = System.currentTimeMillis() - TrackerService.lastFixTime < 5000;
         if (fresh && TrackerService.speedKmh > 5) return;      // niet tijdens het rijden
         String name = WorkLog.pendingName(this);
@@ -338,6 +293,7 @@ public class MainActivity extends Activity {
     private void applyTheme(Theme t) {
         theme = t;
         cockpit.setTheme(t);
+        if (cockpit.bandText != null) cockpit.bandText.setTheme(t);
         if (scanner == null) scanner = findViewById(R.id.scanner);
         if (scanner != null) scanner.setTheme(t);
         float d = getResources().getDisplayMetrics().density;
@@ -382,16 +338,6 @@ public class MainActivity extends Activity {
         sl.addState(new int[]{android.R.attr.state_pressed}, pressed);
         sl.addState(new int[]{}, ld);
         return sl;
-    }
-
-    /** Menu: thema's, update zoeken, debug. */
-    private static String themeDescEn(String id) {
-        switch (id) {
-            case "vfd": return "Turquoise fluorescent, like digital 80s dashboards";
-            case "neon": return "Magenta and cyan neon on deep purple";
-            case "old": return "All made of lamps: dot-matrix digits and text";
-            default: return "Red, amber and green LED, like the sketch";
-        }
     }
 
     /** Taal gewisseld: datum, toetsen en cockpit opnieuw opbouwen. */
@@ -462,72 +408,6 @@ public class MainActivity extends Activity {
         Immersive.apply(menuDlg.getWindow());
     }
 
-    /** Rij van gelijke keuzeknoppen. */
-    private LinearLayout choiceRow(float d, View... items) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        for (View v : items) {
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, (int) (48 * d), 1f);
-            lp.setMargins((int) (5 * d), (int) (4 * d), (int) (5 * d), (int) (4 * d));
-            row.addView(v, lp);
-        }
-        return row;
-    }
-
-    /** Keuzeknop: gekozen = gloeiende rand in de toetskleur, anders gedimd. */
-    private View choice(String label, boolean on, float d, View.OnClickListener l) {
-        TextView b = new TextView(this);
-        b.setText(label);
-        b.setGravity(android.view.Gravity.CENTER);
-        b.setTypeface(android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD));
-        b.setLetterSpacing(0.15f);
-        b.setTextSize(13);
-        b.setTextColor(on ? theme.key : 0xFF8E8E9A);
-        if (on) b.setShadowLayer(8f, 0, 0, (theme.key & 0x00FFFFFF) | 0x99000000);
-        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
-        g.setCornerRadius(6 * d);
-        g.setColor(on ? ((theme.key & 0x00FFFFFF) | 0x26000000) : 0xFF141418);
-        g.setStroke((int) ((on ? 2 : 1) * d), on ? theme.key : 0xFF2C2C35);
-        b.setBackground(g);
-        b.setClickable(true);
-        b.setOnClickListener(l);
-        return b;
-    }
-
-    private TextView menuLabel(String t, int col, float d) {
-        TextView v = new TextView(this);
-        v.setText(t);
-        v.setTypeface(android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD));
-        v.setLetterSpacing(0.2f);
-        v.setTextSize(13);
-        v.setTextColor(col);
-        v.setShadowLayer(8f, 0, 0, (col & 0x00FFFFFF) | 0x99000000);
-        v.setPadding((int) (6 * d), (int) (12 * d), 0, (int) (6 * d));
-        return v;
-    }
-
-    private View menuButton(int icon, String label, float d, View.OnClickListener l) {
-        LinearLayout b = new LinearLayout(this);
-        b.setOrientation(LinearLayout.HORIZONTAL);
-        b.setGravity(android.view.Gravity.CENTER);
-        b.setBackground(keyBackground(theme.key, d));
-        android.widget.ImageView iv = new android.widget.ImageView(this);
-        iv.setImageResource(icon);
-        iv.setImageTintList(android.content.res.ColorStateList.valueOf(theme.key));
-        b.addView(iv, new LinearLayout.LayoutParams((int) (32 * d), (int) (32 * d)));
-        TextView tv = menuLabel(label, theme.key, d);
-        tv.setPadding((int) (10 * d), 0, 0, 0);
-        b.addView(tv);
-        b.setClickable(true);
-        b.setOnClickListener(l);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, (int) (72 * d), 1f);
-        b.setLayoutParams(lp);
-        android.widget.FrameLayout wrap = new android.widget.FrameLayout(this);
-        wrap.setPadding((int) (6 * d), (int) (6 * d), (int) (6 * d), (int) (6 * d));
-        wrap.addView(b, new android.widget.FrameLayout.LayoutParams(-1, -1));
-        return wrap;
-    }
-
     private void refreshCockpit(boolean fresh) {
         CockpitView c = cockpit;
         c.now = Clock.now();
@@ -569,25 +449,6 @@ public class MainActivity extends Activity {
         c.invalidate();
     }
 
-    private void refreshTrip() {
-        float km = store.tripKm();
-        if (km < 0.05f) {
-            trip.setText(Lang.t("Rit: nog niet gereden", "Trip: not driven yet"));
-            return;
-        }
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format(NL, "Rit %.1f km  ·  gem %.0f km/u  ·  max %.0f km/u  ·  ~%.1f l",
-                km, store.tripAvgKmh(), store.tripMaxKmh(), store.tripLiters()));
-        float cost = store.tripCost();
-        if (cost >= 0) sb.append(String.format(NL, "  ·  € %.2f", cost));
-        trip.setText(sb.toString());
-    }
-
-    private void setStatus(TextView v, int colorRes, String text) {
-        v.setText(text);
-        v.setTextColor(getColor(colorRes));
-    }
-
     /** 0 = geen netwerk, 1 = verbonden zonder internet, 2 = internet ok. */
     private int netState() {
         try {
@@ -597,32 +458,6 @@ public class MainActivity extends Activity {
             NetworkCapabilities c = cm.getNetworkCapabilities(n);
             if (c == null) return 0;
             if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return 2;
-            return 1;
-        } catch (Exception e) {
-            return 0;
-        }
-    }
-
-    /** 0 = onbekend (geen Android-Bluetooth), 1 = niet verbonden, 2 = verbonden. */
-    private int btState() {
-        try {
-            BluetoothAdapter ad = BluetoothAdapter.getDefaultAdapter();
-            if (ad == null || !ad.isEnabled()) return 0;
-            // De head unit is de "handsfree-kant": telefoon komt binnen via
-            // HEADSET_CLIENT (16) / A2DP_SINK (11). Ook de gewone profielen checken.
-            int[] profiles = {16, 11, 1, 2};
-            for (int pr : profiles) {
-                try {
-                    if (ad.getProfileConnectionState(pr) == BluetoothAdapter.STATE_CONNECTED) return 2;
-                } catch (Exception ignored) { }
-            }
-            Set<BluetoothDevice> bonded = ad.getBondedDevices();
-            if (bonded == null) return 0;
-            Method isConnected = BluetoothDevice.class.getMethod("isConnected");
-            for (BluetoothDevice d : bonded) {
-                Object r = isConnected.invoke(d);
-                if (r instanceof Boolean && (Boolean) r) return 2;
-            }
             return 1;
         } catch (Exception e) {
             return 0;
@@ -824,72 +659,31 @@ public class MainActivity extends Activity {
         String pr = store.price() > 0 ? String.format(java.util.Locale.US, "%.3f", store.price()) : "";
         InputForm.Field[] f = {
                 new InputForm.Field(Lang.t("LITERS GETANKT", "LITRES FILLED"), "", Lang.t("bv. 39.94", "e.g. 39.94"), false),
-                new InputForm.Field(Lang.t("PRIJS PER LITER (€)", "PRICE PER LITRE (€)"), pr, Lang.t("bv. 2.089", "e.g. 2.089"), false)};
+                new InputForm.Field(Lang.t("PRIJS PER LITER (€)", "PRICE PER LITRE (€)"), pr, Lang.t("bv. 2.089", "e.g. 2.089"), false),
+                new InputForm.Field(Lang.t("KM-STAND TELLER (MAG LEEG)", "ODOMETER (OPTIONAL)"), "",
+                        store.odometer() > 0 ? String.format(java.util.Locale.US, Lang.t("nu ongeveer %d, maakt de verbruiksmeting exacter", "now about %d, makes the fuel measurement exact"), store.odometer())
+                                : Lang.t("maakt de verbruiksmeting exacter", "makes the fuel measurement exact"), false)};
         float t = store.tankLiters();
         String sub = t >= 0 ? String.format(java.util.Locale.US, Lang.t("TANK NU ~%.0f VAN 57 L", "TANK NOW ~%.0f OF 57 L"), t) : "";
         InputForm.show(this, Lang.t("TANKEN", "REFUEL"), sub, f, Lang.t("TANK IS NU VOL (57 L)", "TANK IS NOW FULL (57 L)"), false, ".",
                 (v, full) -> {
                     float l = parse(v[0]), p = parse(v[1]);
+                    int odo = Math.round(parse(v[2]));
                     if (!full && l <= 0) return Lang.t("VUL LITERS IN, OF ZET 'VOL' AAN", "ENTER LITRES, OR SWITCH 'FULL' ON");
+                    // vol zonder liters mag alleen als startpunt; na een gereden tank zijn de liters nodig voor de meting
+                    if (full && l <= 0 && store.hadFull() && store.kmSinceFull() >= 50f)
+                        return Lang.t("VUL DE LITERS IN: NODIG VOOR DE VERBRUIKSMETING", "ENTER THE LITRES: NEEDED FOR THE FUEL MEASUREMENT");
                     if (l > 80) return Lang.t("MEER DAN 80 LITER? CONTROLEER DE INVOER", "MORE THAN 80 LITRES? CHECK THE INPUT");
-                    store.fill(Math.max(0f, l), p, full);
-                    CarLogger.note(String.format(java.util.Locale.US, "tanken: %.2f l, %.3f EUR/l, vol=%b", l, p, full));
+                    if (!v[2].trim().isEmpty() && (odo < 1000 || odo > 2_000_000)) return Lang.t("KM-STAND KLOPT NIET", "ODOMETER LOOKS WRONG");
+                    int known = store.odometer();
+                    if (odo > 0 && known > 0 && Math.abs(odo - known) > 5000)
+                        CarLogger.note("tanken: km-stand " + odo + " wijkt veel af van de schatting " + known);
+                    store.fill(Math.max(0f, l), p, full, v[2].trim().isEmpty() ? -1 : odo);
+                    CarLogger.note(String.format(java.util.Locale.US, "tanken: %.2f l, %.3f EUR/l, vol=%b, km-stand %s", l, p, full, v[2].trim().isEmpty() ? "-" : String.valueOf(odo)));
                     toast(full ? Lang.t("Tank vol opgeslagen", "Full tank saved") : Lang.t("Tankbeurt opgeslagen", "Refuel saved"));
                     refresh();
                     return null;
                 });
-    }
-
-    private EditText numberField(String hint) {
-        EditText e = new EditText(this);
-        e.setHint(hint);
-        e.setTextSize(16);
-        e.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        e.setKeyListener(DigitsKeyListener.getInstance("0123456789.,"));
-        e.setShowSoftInputOnFocus(false); // eigen toetsenblok met punt
-        e.setOnFocusChangeListener((v, has) -> { if (has) focusedField = (EditText) v; });
-        return e;
-    }
-
-    private EditText focusedField;
-
-    /** Groot numeriek toetsenblok (1-9, punt, 0, wissen): werkt altijd, ook met punt, en is goed te raken in de auto. */
-    private View keypad(EditText first, EditText second) {
-        focusedField = first;
-        first.requestFocus();
-        float d = getResources().getDisplayMetrics().density;
-        android.widget.GridLayout g = new android.widget.GridLayout(this);
-        g.setColumnCount(3);
-        g.setPadding((int) (10 * d), 0, 0, 0);
-        String[] keys = {"1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"};
-        for (String k : keys) {
-            android.widget.Button b = new android.widget.Button(this);
-            b.setText(k);
-            b.setTextSize(17);
-            b.setPadding(0, 0, 0, 0);
-            b.setTextColor(0xFFFFB21A);
-            b.setBackgroundResource(R.drawable.key_bg);
-            android.widget.GridLayout.LayoutParams lp = new android.widget.GridLayout.LayoutParams(
-                    android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
-                    android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f));
-            lp.width = 0;
-            lp.height = (int) (38 * d);
-            lp.setMargins((int) (3 * d), (int) (3 * d), (int) (3 * d), (int) (3 * d));
-            b.setOnClickListener(v -> {
-                EditText f = focusedField != null ? focusedField : first;
-                android.text.Editable t = f.getText();
-                if (k.equals("⌫")) {
-                    if (t.length() > 0) t.delete(t.length() - 1, t.length());
-                } else if (k.equals(".")) {
-                    if (t.toString().indexOf('.') < 0 && t.toString().indexOf(',') < 0) t.append(t.length() == 0 ? "0." : ".");
-                } else {
-                    t.append(k);
-                }
-                f.setSelection(f.getText().length());
-            });
-            g.addView(b, lp);
-        }
-        return g;
     }
 
     private static float parse(String s) {
@@ -898,11 +692,6 @@ public class MainActivity extends Activity {
     }
 
     // ---------- overig ----------
-
-    private static String capitalize(String s) {
-        if (s == null || s.isEmpty()) return s;
-        return s.substring(0, 1).toUpperCase(NL) + s.substring(1);
-    }
 
     private void toast(String msg) {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();

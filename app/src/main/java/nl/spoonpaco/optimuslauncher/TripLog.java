@@ -103,11 +103,20 @@ public final class TripLog {
                 s.getInt("odoStart", -1), store.odometer(), score);
         File f = new File(dir(c), "ritten.csv");
         if (!f.exists()) append(f, HEADER + "\n");
+        else if (!endsWithNewline(f)) append(f, "\n");   // vorige regel half geschreven: nieuwe rit op een eigen regel
         append(f, line);
         CarLogger.note("rittenlog: rit opgeslagen (" + String.format(Locale.US, "%.1f km", sum[0]) + ")");
         double sLat0 = 0, sLon0 = 0;
         try { sLat0 = Double.parseDouble(s.getString("sLat", "0")); sLon0 = Double.parseDouble(s.getString("sLon", "0")); } catch (Exception ignored) { }
         WorkLog.onTripEnded(c, id, sLat0, sLon0, eLat, eLon, sum[0]);
+    }
+
+    private static boolean endsWithNewline(File f) {
+        try (java.io.RandomAccessFile r = new java.io.RandomAccessFile(f, "r")) {
+            if (r.length() == 0) return true;
+            r.seek(r.length() - 1);
+            return r.read() == '\n';
+        } catch (Exception e) { return true; }
     }
 
     public static boolean active(Context c) { return sp(c).getLong("id", 0) != 0; }
@@ -121,12 +130,14 @@ public final class TripLog {
         List<Trip> out = new ArrayList<>();
         File f = new File(dir(c), "ritten.csv");
         if (!f.exists()) return out;
+        int skipped = 0;
         try (BufferedReader r = new BufferedReader(new FileReader(f))) {
             String l;
             while ((l = r.readLine()) != null) {
                 if (l.startsWith("id;") || l.trim().isEmpty()) continue;
                 String[] p = l.split(";");
                 if (p.length < 15) continue;
+                try {   // één kapotte regel (bv. stroom weg tijdens schrijven) overslaan, niet alles daarna kwijt
                 Trip t = new Trip();
                 t.id = Long.parseLong(p[0]); t.start = Long.parseLong(p[1]); t.end = Long.parseLong(p[2]);
                 t.sLat = Double.parseDouble(p[3]); t.sLon = Double.parseDouble(p[4]);
@@ -137,11 +148,14 @@ public final class TripLog {
                 t.odoStart = Integer.parseInt(p[13]); t.odoEnd = Integer.parseInt(p[14]);
                 if (p.length > 15) t.score = Integer.parseInt(p[15].trim());
                 out.add(t);
+                } catch (Exception bad) { skipped++; }
             }
         } catch (Exception ignored) { }
+        if (skipped > 0 && skipped != lastSkipped) { lastSkipped = skipped; CarLogger.note("rittenlog: " + skipped + " kapotte regel(s) overgeslagen"); }
         Collections.reverse(out);
         return out;
     }
+    private static volatile int lastSkipped = 0;
 
     /** Highscores: top 5 scores, plus zuinigste en langste rit, als display-regels. */
     public static String[][] highscores(Context c) {

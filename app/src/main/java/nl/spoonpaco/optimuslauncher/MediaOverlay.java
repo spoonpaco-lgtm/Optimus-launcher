@@ -48,6 +48,7 @@ final class MediaOverlay {
         if (card != null) {
             String th = ctx.getSharedPreferences("optimus", Context.MODE_PRIVATE).getString("theme", "led");
             card.theme(Theme.byId(th));
+            if (cardText != null) cardText.setTheme(Theme.byId(th));
             card.invalidate();
         }
     }

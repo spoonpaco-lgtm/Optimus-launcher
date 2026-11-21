@@ -81,7 +81,11 @@ public class MusicPanel extends View {
         return false;
     }
 
-    public void tick() { invalidate(); removeCallbacks(ticker); postDelayed(ticker, 1000); }
+    /** Elke seconde alleen het "nu speelt"-blok (tijd, voortgang, scanner) opnieuw; de rest bij een wijziging. */
+    public void tick() {
+        if (!searching) invalidate(Math.round(512 * s), 0, getWidth(), Math.round(290 * s));
+        removeCallbacks(ticker); postDelayed(ticker, 1000);
+    }
 
     @Override protected void onSizeChanged(int w, int h, int ow, int oh) { s = w / 1240f; H = h / s; listArea.bottom = H - 18; }
 
@@ -150,12 +154,13 @@ public class MusicPanel extends View {
             pt.uiText(c, String.format(Locale.US, Lang.t("BIBLIOTHEEK BIJWERKEN  %d / %d", "UPDATING LIBRARY  %d / %d"), mp.indexed, mp.total),
                     bn.left + 16, bn.centerY() + 6, 14, AMB, Paint.Align.LEFT);
             pt.uiGlass(c, bn);
-            postInvalidateDelayed(500);
+            postInvalidateDelayed(500, 0, 0, Math.round(500 * s), getHeight());   // alleen de linkerkant
         }
 
         // ---- rechts: hoes + nu speelt (tijdens zoeken: de resultaten) ----
         float X = 536;
         if (searching) {
+            if (marquee != null) marquee.clear();   // titelvlak niet over de zoekresultaten
             drawRows(c, key, searchResults, new RectF(X, 26, 1216, H - 90), 72);
             drawBottomButtons(c, key, X);
             c.restore();
@@ -303,12 +308,26 @@ public class MusicPanel extends View {
 
     private String keyOf(MusicPlayer.Track t, int lvl) {
         switch (lvl) {
-            case 0: return t.folder;
+            case 0: return t.folder + SEP + new java.io.File(t.path).getParent();   // mappen met dezelfde naam apart
             case 1: return t.groupArtist().isEmpty() ? Lang.t("ONBEKENDE ARTIEST", "UNKNOWN ARTIST") : t.groupArtist();
-            case 2: return t.album.isEmpty() ? Lang.t("ONBEKEND ALBUM", "UNKNOWN ALBUM") : t.album;
+            case 2: return albumKey(t);
             default: return t.genre.isEmpty() ? Lang.t("GEEN GENRE", "NO GENRE") : t.genre;
         }
     }
+
+    /**
+     * Album = naam + album artist (of, zonder die tag, de map). Zo vallen "Greatest Hits" van
+     * verschillende artiesten niet samen, en blijft een verzamel-CD in één map heel.
+     */
+    private static final char SEP = '\u0001';
+    private static String albumKey(MusicPlayer.Track t) {
+        String name = t.album.isEmpty() ? Lang.t("ONBEKEND ALBUM", "UNKNOWN ALBUM") : t.album;
+        String who = !t.albumArtist.isEmpty() ? "a:" + t.albumArtist.toLowerCase(Locale.ROOT)
+                : "f:" + (new java.io.File(t.path).getParent());
+        return name + SEP + who;
+    }
+    /** Wat je ziet van een groepsleutel (zonder het onzichtbare onderscheid). */
+    private static String shown(String key) { int i = key.indexOf(SEP); return i < 0 ? key : key.substring(0, i); }
 
     private String count(int n) { return n + (n == 1 ? Lang.t(" NUMMER", " TRACK") : Lang.t(" NUMMERS", " TRACKS")); }
 
@@ -343,13 +362,15 @@ public class MusicPanel extends View {
                 if (ok) set.add(t);
             }
             if (!path.isEmpty()) {
-                String crumb = android.text.TextUtils.join("  >  ", path);
+                List<String> vis = new ArrayList<>();
+                for (String pk : path) vis.add(shown(pk));
+                String crumb = android.text.TextUtils.join("  >  ", vis);
                 rows.add(new Object[]{"< " + Lang.t("TERUG", "BACK"), crumb, (Runnable) () -> { path.remove(path.size() - 1); scroll = 0; }, false});
             }
             if (path.size() < lv.length) {
                 final List<MusicPlayer.Track> playAll = new ArrayList<>(set);
                 sortTracks(playAll);
-                if (!playAll.isEmpty()) rows.add(new Object[]{path.isEmpty() ? Lang.t("ALLES AFSPELEN", "PLAY ALL") : Lang.t("ALLES VAN ", "ALL OF ") + path.get(path.size() - 1),
+                if (!playAll.isEmpty()) rows.add(new Object[]{path.isEmpty() ? Lang.t("ALLES AFSPELEN", "PLAY ALL") : Lang.t("ALLES VAN ", "ALL OF ") + shown(path.get(path.size() - 1)),
                         count(playAll.size()), (Runnable) () -> mp.play(playAll, 0), false});
                 if (path.isEmpty()) {
                     int nf = mp.favorites().size();
@@ -363,12 +384,23 @@ public class MusicPanel extends View {
                     if (l == null) { l = new ArrayList<>(); g.put(k, l); }
                     l.add(t);
                 }
+                java.util.Map<String, Integer> dup = new java.util.HashMap<>();
+                for (String gk : g.keySet()) dup.merge(shown(gk), 1, Integer::sum);
                 for (java.util.Map.Entry<String, List<MusicPlayer.Track>> e : g.entrySet()) {
                     final String name = e.getKey();
+                    String label = shown(name);
+                    if (lvl == 0 && dup.get(label) > 1) {   // twee mappen "CD1": bovenliggende map erbij
+                        java.io.File pf = new java.io.File(e.getValue().get(0).path).getParentFile();
+                        java.io.File gp = pf == null ? null : pf.getParentFile();
+                        if (gp != null) label = gp.getName() + " / " + label;
+                    }
                     boolean has = cur != null && e.getValue().contains(cur);
                     String sub = count(e.getValue().size());
-                    if (lvl == 2 && !e.getValue().get(0).artist.isEmpty() && path.isEmpty()) sub = e.getValue().get(0).artist + "  ·  " + sub;
-                    rows.add(new Object[]{name, sub, (Runnable) () -> { path.add(name); scroll = 0; }, has});
+                    if (lvl == 2 && path.isEmpty()) {
+                        String ga = e.getValue().get(0).groupArtist();
+                        if (!ga.isEmpty()) sub = ga + "  ·  " + sub;
+                    }
+                    rows.add(new Object[]{label, sub, (Runnable) () -> { path.add(name); scroll = 0; }, has});
                 }
             } else {
                 final List<MusicPlayer.Track> tr = set;
@@ -448,7 +480,7 @@ public class MusicPanel extends View {
         pt.uiText(c, txt + ((System.currentTimeMillis() / 500) % 2 == 0 ? "_" : ""), q.left + 40, q.centerY() + 8, 22,
                 query.length() == 0 ? 0xFF6C6C78 : AMB, Paint.Align.LEFT);
         pt.uiGlass(c, q);
-        postInvalidateDelayed(500);
+        postInvalidateDelayed(500, (int) (q.left * s), (int) (q.top * s), (int) (q.right * s) + 1, (int) (q.bottom * s) + 1);   // alleen de cursor
 
         String[] rowsK = {"1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"};
         float gap = 7, kbTop = q.bottom + 16, kh = (listArea.bottom - kbTop - 4 * gap) / 5f;
@@ -488,7 +520,7 @@ public class MusicPanel extends View {
         for (MusicPlayer.Track t : mp.all()) {
             String ga = t.groupArtist();
             if (!ga.isEmpty() && (ga.toLowerCase(Locale.ROOT).contains(q) || t.artist.toLowerCase(Locale.ROOT).contains(q))) artists.merge(ga, 1, Integer::sum);
-            if (!t.album.isEmpty() && t.album.toLowerCase(Locale.ROOT).contains(q)) { albums.merge(t.album, 1, Integer::sum); albumArtist.put(t.album, t.groupArtist()); }
+            if (!t.album.isEmpty() && t.album.toLowerCase(Locale.ROOT).contains(q)) { String ak = albumKey(t); albums.merge(ak, 1, Integer::sum); albumArtist.put(ak, t.groupArtist()); }
             if (t.label().toLowerCase(Locale.ROOT).contains(q) && tracks.size() < 40) tracks.add(t);
         }
         int n = 0;
@@ -503,7 +535,7 @@ public class MusicPanel extends View {
             if (n++ >= 6) break;
             final String al = e.getKey();
             String ar = albumArtist.get(al);
-            rows.add(new Object[]{al, "ALBUM  ·  " + (ar == null || ar.isEmpty() ? "" : ar + "  ·  ") + count(e.getValue()),
+            rows.add(new Object[]{shown(al), "ALBUM  ·  " + (ar == null || ar.isEmpty() ? "" : ar + "  ·  ") + count(e.getValue()),
                     (Runnable) () -> { searching = false; mode = 2; path.clear(); path.add(al); scroll = 0; }, false});
         }
         for (int i = 0; i < tracks.size(); i++) {

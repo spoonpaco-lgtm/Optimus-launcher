@@ -146,6 +146,10 @@ public class TrackerService extends Service implements LocationListener {
         CarSignals.listener = (name, v) -> ui.post(() -> onCarSignal(name, v));
         android.content.IntentFilter uf = new android.content.IntentFilter();
         uf.addAction(Intent.ACTION_MEDIA_MOUNTED);
+        uf.addAction(Intent.ACTION_MEDIA_EJECT);
+        uf.addAction(Intent.ACTION_MEDIA_UNMOUNTED);
+        uf.addAction(Intent.ACTION_MEDIA_REMOVED);
+        uf.addAction(Intent.ACTION_MEDIA_BAD_REMOVAL);
         uf.addDataScheme("file");
         registerReceiver(usbRx, uf);
 
@@ -393,7 +397,14 @@ public class TrackerService extends Service implements LocationListener {
         @Override public void onReceive(Context c, Intent i) {
             if (i.getData() == null) return;
             final String path = i.getData().getPath();
+            if (!Intent.ACTION_MEDIA_MOUNTED.equals(i.getAction())) {
+                // stick eruit: muziek stoppen (anders probeert de speler eindeloos nummers die er niet meer zijn)
+                PowerLog.log("USB-stick weg: " + path + " (" + i.getAction() + ")");
+                MusicPlayer.get(TrackerService.this).onStickRemoved(path);
+                return;
+            }
             PowerLog.log("USB-stick: " + path);
+            MusicPlayer.get(TrackerService.this).onStickMounted(path);
             new Thread(() -> UsbStick.handle(TrackerService.this, path, store), "usb-stick").start();
         }
     };

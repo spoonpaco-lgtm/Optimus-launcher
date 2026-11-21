@@ -39,6 +39,10 @@ final class UsbStick {
                 if (f != null && f.getAbsolutePath().startsWith(mount)) { base = f; break; }
             }
             if (base == null) base = new File(mount, "OptimusLog");
+            // de muziekstick zit er vast in: hooguit één keer per dag kopiëren, en maar 3 logmappen bewaren
+            android.content.SharedPreferences sp = c.getSharedPreferences("power", Context.MODE_PRIVATE);
+            String todayKey = new SimpleDateFormat("yyyyMMdd", Locale.US).format(new Date(Clock.now()));
+            if (todayKey.equals(sp.getString("logExportDay", ""))) { PowerLog.log("USB-stick: logs vandaag al gekopieerd"); return; }
             String stamp = new SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(new Date(Clock.now()));
             File dest = new File(base, "OptimusLog-" + stamp);
             if (!dest.mkdirs() && !dest.isDirectory()) throw new Exception("kan map niet maken op stick");
@@ -68,12 +72,29 @@ final class UsbStick {
                 w.write("Huidige rit: " + store.summaryShort() + "\n");
                 w.write(String.format(Locale.US, "Kalibratiefactor verbruik: %.3f\n", store.calFactor()));
             }
+            sp.edit().putString("logExportDay", todayKey).apply();
+            pruneOld(base, 3);
             PowerLog.log("USB-stick: " + n + " logbestanden gekopieerd naar " + dest.getAbsolutePath());
             toast(c, "Logs gekopieerd naar USB-stick (" + n + " bestanden)");
         } catch (Exception e) {
             PowerLog.log("USB-stick: kopiëren mislukt: " + e.getMessage());
             toast(c, "Logs kopiëren naar USB-stick mislukt: " + e.getMessage());
         }
+    }
+
+    /** Alleen de nieuwste 'keep' OptimusLog-mappen op de stick laten staan. */
+    private static void pruneOld(File base, int keep) {
+        File[] ds = base.listFiles(f -> f.isDirectory() && f.getName().startsWith("OptimusLog-"));
+        if (ds == null || ds.length <= keep) return;
+        java.util.Arrays.sort(ds, (a, b) -> b.getName().compareTo(a.getName()));   // naam = datum, nieuwste eerst
+        for (int i = keep; i < ds.length; i++) {
+            File[] in = ds[i].listFiles();
+            if (in != null) for (File f : in) //noinspection ResultOfMethodCallIgnored
+                f.delete();
+            //noinspection ResultOfMethodCallIgnored
+            ds[i].delete();
+        }
+        PowerLog.log("USB-stick: oude logmappen opgeruimd (" + (ds.length - keep) + ")");
     }
 
     private static void offerUpdate(Context c, String mount) {

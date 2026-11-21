@@ -22,7 +22,6 @@ import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -65,7 +64,7 @@ public final class MusicPlayer {
     private MediaPlayer mp;
     private boolean prepared = false, wantPlay = false, pausedByFocus = false;
     private MediaSession session;
-    private Bitmap art; private String artFor = "";
+    private volatile Bitmap art; private volatile String artFor = "";
 
     private MusicPlayer(Context c) {
         ctx = c;
@@ -139,6 +138,14 @@ public final class MusicPlayer {
                     if (++indexed % 25 == 0) changed();
                 }
                 try { mmr.release(); } catch (Exception ignored) { }
+                // index opruimen: nummers die van déze stick verdwenen zijn eruit (andere sticks blijven bewaard)
+                if (r != null) {
+                    java.util.Set<String> seen = new java.util.HashSet<>();
+                    for (File f : files) seen.add(f.getAbsolutePath() + "|" + f.length());
+                    String pre = r.getAbsolutePath() + "/";
+                    java.util.Iterator<String> it = idx.keySet().iterator();
+                    while (it.hasNext()) { String k = it.next(); if (k.startsWith(pre) && !seen.contains(k)) it.remove(); }
+                }
                 saveIndex(idx);
                 Collections.sort(out, (a, b) -> a.path.compareToIgnoreCase(b.path));
                 synchronized (library) { library.clear(); library.addAll(out); }
@@ -199,8 +206,8 @@ public final class MusicPlayer {
         Map<String, JSONObject> m = new HashMap<>();
         try (FileInputStream in = new FileInputStream(indexFile())) {
             byte[] b = new byte[(int) indexFile().length()];
-            int n = in.read(b);
-            JSONObject o = new JSONObject(new String(b, 0, Math.max(0, n), "UTF-8"));
+            int n = 0; while (n < b.length) { int k = in.read(b, n, b.length - n); if (k < 0) break; n += k; }   // helemaal inlezen
+            JSONObject o = new JSONObject(new String(b, 0, n, "UTF-8"));
             java.util.Iterator<String> it = o.keys();
             while (it.hasNext()) { String k = it.next(); m.put(k, o.getJSONObject(k)); }
         } catch (Exception ignored) { }
@@ -291,37 +298,6 @@ public final class MusicPlayer {
         }
         for (String sep : new String[]{";", "/", ","}) { int i = g.indexOf(sep); if (i > 0) { g = g.substring(0, i).trim(); break; } }
         return g.isEmpty() ? g : g.substring(0, 1).toUpperCase(java.util.Locale.ROOT) + g.substring(1);
-    }
-
-    /** Groepen voor de lijst: mode 0 = mappen, 1 = artiesten, 2 = albums, 3 = genres. Sleutel -> nummers. */
-    public LinkedHashMap<String, List<Track>> groups(int mode) {
-        Map<String, List<Track>> m = new HashMap<>();
-        synchronized (library) {
-            for (Track t : library) {
-                String k = mode == 0 ? t.folder : mode == 1 ? (t.artist.isEmpty() ? Lang.t("ONBEKENDE ARTIEST", "UNKNOWN ARTIST") : t.artist)
-                        : mode == 2 ? (t.album.isEmpty() ? Lang.t("ONBEKEND ALBUM", "UNKNOWN ALBUM") : t.album)
-                        : (t.genre.isEmpty() ? Lang.t("GEEN GENRE", "NO GENRE") : t.genre);
-                List<Track> l = m.get(k);
-                if (l == null) { l = new ArrayList<>(); m.put(k, l); }
-                l.add(t);
-            }
-        }
-        List<String> keys = new ArrayList<>(m.keySet());
-        Collections.sort(keys, String::compareToIgnoreCase);
-        LinkedHashMap<String, List<Track>> out = new LinkedHashMap<>();
-        for (String k : keys) {
-            List<Track> l = m.get(k);
-            Collections.sort(l, (a, b) -> {
-                int c = a.album.compareToIgnoreCase(b.album);
-                if (mode != 2 && mode != 3 && c != 0) return c;
-                if (mode == 3) { int ca = a.artist.compareToIgnoreCase(b.artist); if (ca != 0) return ca; if (c != 0) return c; }
-                int na = a.no > 0 ? a.no : Integer.MAX_VALUE, nb = b.no > 0 ? b.no : Integer.MAX_VALUE;
-                if (na != nb) return Integer.compare(na, nb);
-                return a.path.compareToIgnoreCase(b.path);
-            });
-            out.put(k, l);
-        }
-        return out;
     }
 
     public List<Track> all() { synchronized (library) { return new ArrayList<>(library); } }
@@ -502,13 +478,21 @@ public final class MusicPlayer {
             mp.setAudioStreamType(AudioManager.STREAM_MUSIC);
             mp.setDataSource(t.path);
             mp.setOnPreparedListener(m -> {
-                prepared = true;
+                prepared = true; errorsInRow = 0;
                 if (pendingSeek > 0) { try { m.seekTo(pendingSeek); } catch (Exception ignored) { } pendingSeek = 0; }
                 if (wantPlay) m.start();
                 updateSession(); changed(); saveState();
             });
             mp.setOnCompletionListener(m -> finished());
-            mp.setOnErrorListener((m, w, x) -> { CarLogger.note("muziek: kan niet afspelen " + t.path); h.postDelayed(this::next, 500); return true; });
+            mp.setOnErrorListener((m, w, x) -> {
+                // stick weg of steeds kapotte bestanden: niet eindeloos doorspringen
+                if (++errorsInRow >= 5 || !new File(t.path).exists()) {
+                    CarLogger.note("muziek: kan niet afspelen " + t.path + ", gestopt (" + errorsInRow + "x fout achter elkaar)");
+                    errorsInRow = 0; stop(); return true;
+                }
+                CarLogger.note("muziek: kan niet afspelen " + t.path);
+                h.postDelayed(this::next, 500); return true;
+            });
             mp.prepareAsync();
             CarLogger.note("muziek: speelt " + t.label() + " - " + t.artist);
         } catch (Exception e) {
@@ -523,6 +507,35 @@ public final class MusicPlayer {
     }
 
     public void stop() { wantPlay = false; release(); abandonFocus(); updateSession(); changed(); }
+
+    private int errorsInRow = 0;
+
+    /** Stick (of SD) is eruit: stoppen en de bibliotheek leegmaken. De opgeslagen stand blijft voor later. */
+    public void onStickRemoved(String mount) {
+        h.post(() -> {
+            String r = root;
+            Track t = current();
+            boolean ours = (r != null && mount != null && r.startsWith(mount)) || (t != null && mount != null && t.path.startsWith(mount))
+                    || (r != null && !new File(r).canRead());   // ander pad voor dezelfde stick: is onze map nog leesbaar?
+            if (!ours) return;
+            if (isPlaying()) saveState(true);
+            h.removeCallbacks(saver);
+            stop();
+            queue = new ArrayList<>(); order = new ArrayList<>(); pos = -1;
+            synchronized (library) { library.clear(); }
+            root = null;
+            CarLogger.note("muziek: stick eruit (" + mount + "), gestopt");
+            changed();
+        });
+    }
+
+    /** Stick erin: bibliotheek op de achtergrond bijwerken (gaat snel dankzij de index). */
+    public void onStickMounted(String mount) {
+        h.postDelayed(() -> {
+            String r = root;
+            boolean same = r != null && mount != null && r.startsWith(mount) && librarySize() > 0;
+            if (!scanning && !same) { CarLogger.note("muziek: stick erin (" + mount + "), bibliotheek bijwerken"); scan(); } }, 2000);
+    }
 
     // ---------------------------------------------------------------- audiofocus
 
@@ -587,27 +600,38 @@ public final class MusicPlayer {
 
     // ---------------------------------------------------------------- hoes
 
-    /** Albumhoes van het huidige nummer (ingebed of cover.jpg/folder.jpg in de map), of null. */
+    /** Albumhoes van het huidige nummer (ingebed of cover.jpg/folder.jpg in de map), of null.
+     *  Wordt op de achtergrond ingelezen: tot hij klaar is geeft dit null (dan tekent het scherm de zonsondergang). */
     public Bitmap art() {
         Track t = current();
         if (t == null) return null;
         if (t.path.equals(artFor)) return art;
         artFor = t.path; art = null;
+        final String path = t.path;
+        new Thread(() -> {
+            Bitmap b = loadArt(path);
+            h.post(() -> { if (path.equals(artFor)) { art = b; if (b != null) changed(); } });
+        }, "music-art").start();
+        return null;
+    }
+
+    private static Bitmap loadArt(String path) {
+        Bitmap out = null;
         try {
             MediaMetadataRetriever m = new MediaMetadataRetriever();
-            m.setDataSource(t.path);
+            m.setDataSource(path);
             byte[] b = m.getEmbeddedPicture();
             m.release();
-            if (b != null) art = decode(b, null);
+            if (b != null) out = decode(b, null);
         } catch (Exception ignored) { }
-        if (art == null) {
-            File dir = new File(t.path).getParentFile();
+        if (out == null) {
+            File dir = new File(path).getParentFile();
             for (String n : new String[]{"cover.jpg", "folder.jpg", "Cover.jpg", "Folder.jpg", "front.jpg", "cover.png"}) {
                 File f = new File(dir, n);
-                if (f.exists()) { art = decode(null, f.getAbsolutePath()); if (art != null) break; }
+                if (f.exists()) { try { out = decode(null, f.getAbsolutePath()); } catch (Exception ignored) { } if (out != null) break; }
             }
         }
-        return art;
+        return out;
     }
 
     private static Bitmap decode(byte[] b, String path) {

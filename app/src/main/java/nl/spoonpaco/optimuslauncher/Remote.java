@@ -37,8 +37,9 @@ import java.util.Locale;
  *   text       --es value               tekst in het actieve invulveld zetten
  *   dump                                lijst van knoppen/teksten met posities -> files/remote-dump.txt
  *   menu       --ei tab (0-4)           menu openen op tabblad
- *   open       --es what  triplog|debug|fuel|maintenance|highscores|locations|home
- *   key / longkey --es name  aa|radio|eq|fuel|trips|apps|settings|menu
+ *   open       --es what  music|video|triplog|debug|fuel|maintenance|highscores|locations|home
+ *   tone       [--es side L|R]  speakertest
+ *   key / longkey --es name  aa|music|radio|video|trips|apps|menu
  *   theme      --es id  led|vfd|neon|old
  *   lang       --es value  nl|en
  * Alleen bereikbaar via adb: de activity is niet geëxporteerd voor andere apps.

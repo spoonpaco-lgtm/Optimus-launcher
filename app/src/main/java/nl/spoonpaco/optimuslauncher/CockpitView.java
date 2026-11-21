@@ -281,6 +281,7 @@ public class CockpitView extends View {
         RectF r = new RectF(312, 4, 1062, 58);
         long nowMs = System.currentTimeMillis();
         npVisible = npShow && (npPlaying || nowMs < npPinUntil);   // speelt = muziek, anders kompas
+        if (!npVisible && bandText != null) bandText.clear();
         if (npVisible) drawNowPlaying(c, r); else {
         c.save();
         c.clipRect(r);
@@ -356,6 +357,24 @@ public class CockpitView extends View {
         glass(c, hr);
     }
 
+    /** Tekstvlak voor de lopende titel op de band (gezet door MainActivity), of null = zelf tekenen. */
+    MarqueeLines bandText;
+    private final android.graphics.Rect bandPx = new android.graphics.Rect();
+
+    private void placeBand(float l, float t, float rr, float b) {
+        final android.graphics.Rect px = new android.graphics.Rect(Math.round(l * s), Math.round(t * s), Math.round(rr * s), Math.round(b * s));
+        if (px.equals(bandPx)) return;
+        bandPx.set(px);
+        final float unit = s;
+        final MarqueeLines m = bandText;
+        post(() -> {
+            android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(px.width(), px.height());
+            lp.leftMargin = px.left; lp.topMargin = px.top;
+            m.setLayoutParams(lp);
+            m.setUnit(unit);
+        });
+    }
+
     private void drawNowPlaying(Canvas c, RectF r) {
         window(c, r, tAmb, eAmb);
         lampAt(c, r.left + 20, r.centerY(), 7, GRN, npPlaying);
@@ -365,7 +384,13 @@ public class CockpitView extends View {
         c.clipRect(r.left + 76, r.top, textR, r.bottom);
         String main = (npTitle + (npArtist.isEmpty() ? "" : "  ·  " + npArtist)).toUpperCase(Locale.ROOT);
         float avail = textR - (r.left + 82), tw = uiTextWidth(main, 17);
-        if (tw <= avail) {
+        long sinceFb = System.currentTimeMillis() - npPressAt;
+        if (bandText != null) {
+            // eigen klein vlak loopt door: de cockpit hoeft niet 10x per seconde helemaal opnieuw
+            placeBand(r.left + 82, r.top, textR, r.top + 34);
+            if (sinceFb < 900 && npPressed >= 0) bandText.clear();
+            else { bandText.leds(leds); bandText.set(0, main, 17, AMB, 26, 0); }
+        } else if (tw <= avail) {
             text(c, main, r.left + 82, r.top + 26, 17, AMB);
             npScrollFor = "";
         } else {
