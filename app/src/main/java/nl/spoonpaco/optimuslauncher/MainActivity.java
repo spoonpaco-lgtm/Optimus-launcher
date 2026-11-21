@@ -388,6 +388,8 @@ public class MainActivity extends Activity {
             }
             @Override public void setStartAA(boolean aa) { op.edit().putBoolean("startAA", aa).apply(); }
             @Override public void setOverlay(boolean on) { store.setOverlayEnabled(on); }
+            @Override public boolean musicResume() { return MusicPlayer.get(MainActivity.this).resumeEnabled(); }
+            @Override public void setMusicResume(boolean on) { MusicPlayer.get(MainActivity.this).setResumeEnabled(on); }
             @Override public void update() { close(); Updater.check(act, true); }
             @Override public void debug() { close(); startActivity(new Intent(act, DebugActivity.class)); }
             @Override public boolean startAA() { return op.getBoolean("startAA", false); }

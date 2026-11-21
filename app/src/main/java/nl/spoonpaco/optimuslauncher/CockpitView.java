@@ -32,6 +32,8 @@ public class CockpitView extends View {
     public String npTitle = "", npArtist = "", npSub = "", npSrc = "", npTime = "", npTotal = "";
     public float npFrac;
     public boolean npPlaying;
+    private String npScrollFor = "";
+    private long npScrollStart;
     private long npPinUntil, npPressAt;
     private int npPressed = -1;
     private boolean npVisible;
@@ -351,8 +353,23 @@ public class CockpitView extends View {
         for (int i = 2; i >= 0; i--) { npKeys[i].set(kr - kw, r.top + 6, kr, r.bottom - 6); kr -= kw + kg; }
         c.save();
         c.clipRect(r.left + 76, r.top, npKeys[0].left - 10, r.bottom);
-        String main = npTitle + (npArtist.isEmpty() ? "" : "  ·  " + npArtist);
-        text(c, main.toUpperCase(Locale.ROOT), r.left + 82, r.top + 26, 17, AMB);
+        String main = (npTitle + (npArtist.isEmpty() ? "" : "  ·  " + npArtist)).toUpperCase(Locale.ROOT);
+        float avail = npKeys[0].left - 10 - (r.left + 82), tw = uiTextWidth(main, 17);
+        if (tw <= avail) {
+            text(c, main, r.left + 82, r.top + 26, 17, AMB);
+            npScrollFor = "";
+        } else {
+            // lange titel loopt door: 2 s stil, dan 30 px/s, naadloos rond
+            long nowMs = System.currentTimeMillis();
+            if (!main.equals(npScrollFor)) { npScrollFor = main; npScrollStart = nowMs; }
+            float gap = 60, cycle = tw + gap;
+            float t = Math.max(0, (nowMs - npScrollStart - 2000) / 1000f * 30f);
+            float off = t % cycle;
+            if (t > 0 && off < 1.5f && t > cycle - 1) npScrollStart = nowMs - 0; // even stil bij het begin
+            text(c, main, r.left + 82 - off, r.top + 26, 17, AMB);
+            text(c, main, r.left + 82 - off + cycle, r.top + 26, 17, AMB);
+            postInvalidateDelayed(66, (int) (r.left * s), (int) (r.top * s), (int) (r.right * s), (int) (r.bottom * s));
+        }
         text(c, npSub.toUpperCase(Locale.ROOT), r.left + 82, r.bottom - 8, 9, dark(AMB, 0.65f));
         c.restore();
         boolean pressFresh = System.currentTimeMillis() - npPressAt < 250;

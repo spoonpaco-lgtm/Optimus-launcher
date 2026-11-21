@@ -35,6 +35,8 @@ public class MenuView extends View {
         void debug();
         boolean startAA();
         boolean overlay();
+        default boolean musicResume() { return true; }
+        default void setMusicResume(boolean on) { }
         String version();
         String status();
     }
@@ -51,7 +53,7 @@ public class MenuView extends View {
             {"THEMA", "THEME", "kleuren + stijl", "colours + style"},
             {"AUTO", "CAR", "km-stand · onderhoud · accu", "odometer · service · battery"},
             {"RITTEN", "TRIPS", "rittenlog · locaties · scores", "trip log · places · scores"},
-            {"INSTELLINGEN", "SETTINGS", "taal · opstarten · venster", "language · start-up · overlay"},
+            {"INSTELLINGEN", "SETTINGS", "taal · opstarten · muziek", "language · start-up · music"},
             {"SYSTEEM", "SYSTEM", "update · debug", "update · debug"}};
 
     public MenuView(Context c, Theme t, Store store, Host host) {
@@ -338,6 +340,11 @@ public class MenuView extends View {
         label(c, Lang.t("ZWEVEND SNELHEIDSVENSTER (BUITEN DE LAUNCHER)", "FLOATING SPEED WINDOW (OUTSIDE THE LAUNCHER)"), x0, 276, AMB);
         button(c, x0, 290, x0 + bw, 350, Lang.t("AAN", "ON"), ov, () -> { host.setOverlay(true); invalidate(); });
         button(c, x0 + bw + 20, 290, x1, 350, Lang.t("UIT", "OFF"), !ov, () -> { host.setOverlay(false); invalidate(); });
+
+        boolean mr = host.musicResume();
+        label(c, Lang.t("MUZIEK DOORSPELEN NA CONTACT AAN", "RESUME MUSIC ON IGNITION"), x0, 392, AMB);
+        button(c, x0, 406, x0 + bw, 466, Lang.t("AAN", "ON"), mr, () -> { host.setMusicResume(true); invalidate(); });
+        button(c, x0 + bw + 20, 406, x1, 466, Lang.t("UIT", "OFF"), !mr, () -> { host.setMusicResume(false); invalidate(); });
     }
 
     // ---------------------------------------------------------------- SYSTEEM

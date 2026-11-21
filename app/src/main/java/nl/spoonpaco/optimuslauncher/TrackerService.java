@@ -357,6 +357,7 @@ public class TrackerService extends Service implements LocationListener {
             }
         }
         // Contact aan na minstens 1 min uit -> opstartfilmpje (tablet slaapt niet altijd echt, dus niet alleen op scherm/slaap vertrouwen)
+        if (name.equals("contact") && (v == 0 || v == 1)) MusicPlayer.get(this).onContact(v == 1);
         if (name.equals("contact")) {
             long now = android.os.SystemClock.elapsedRealtime();
             long offAt = powerPrefs().getLong("contactOffEl", 0);

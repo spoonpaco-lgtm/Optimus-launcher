@@ -13,6 +13,7 @@ import android.media.session.PlaybackState;
 import android.os.Handler;
 import android.os.Looper;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -119,7 +120,10 @@ public final class MusicPlayer {
                 CarLogger.note("muziek: " + out.size() + " nummers op " + root);
             } catch (Exception e) {
                 CarLogger.note("muziek: inlezen mislukt " + e.getMessage());
-            } finally { scanning = false; changed(); }
+            } finally {
+                scanning = false; changed();
+                if (pendingResume) h.post(this::doResume);
+            }
         }, "music-scan").start();
     }
 
@@ -270,6 +274,7 @@ public final class MusicPlayer {
     public void pause() {
         wantPlay = false;
         try { if (mp != null && prepared) mp.pause(); } catch (Exception ignored) { }
+        if (!contactPausing) saveState();
         updateSession(); changed();
     }
 
@@ -308,7 +313,12 @@ public final class MusicPlayer {
         try {
             mp.setAudioStreamType(AudioManager.STREAM_MUSIC);
             mp.setDataSource(t.path);
-            mp.setOnPreparedListener(m -> { prepared = true; if (wantPlay) m.start(); updateSession(); changed(); });
+            mp.setOnPreparedListener(m -> {
+                prepared = true;
+                if (pendingSeek > 0) { try { m.seekTo(pendingSeek); } catch (Exception ignored) { } pendingSeek = 0; }
+                if (wantPlay) m.start();
+                updateSession(); changed(); saveState();
+            });
             mp.setOnCompletionListener(m -> next());
             mp.setOnErrorListener((m, w, x) -> { CarLogger.note("muziek: kan niet afspelen " + t.path); h.postDelayed(this::next, 500); return true; });
             mp.prepareAsync();
@@ -425,5 +435,91 @@ public final class MusicPlayer {
     public static String time(int ms) {
         int s = Math.max(0, ms / 1000);
         return (s / 60) + ":" + String.format(Locale.US, "%02d", s % 60);
+    }
+
+    // ---------------------------------------------------------------- doorspelen na contact uit/aan
+
+    private boolean pendingResume = false, contactPausing = false;
+    private int pendingSeek = 0, resumeTries = 0;
+    private final Runnable saver = new Runnable() {
+        @Override public void run() { if (isPlaying()) { saveState(); h.postDelayed(this, 5000); } }
+    };
+
+    public boolean resumeEnabled() { return ctx.getSharedPreferences("music", Context.MODE_PRIVATE).getBoolean("resume", true); }
+    public void setResumeEnabled(boolean on) { ctx.getSharedPreferences("music", Context.MODE_PRIVATE).edit().putBoolean("resume", on).apply(); }
+
+    private File stateFile() { return new File(ctx.getFilesDir(), "music-state.json"); }
+
+    /** Huidige wachtrij, nummer en positie bewaren (ook of hij speelde). */
+    private void saveState() { saveState(isPlaying() || (wantPlay && !prepared)); }
+    private void saveState(boolean playing) {
+        if (order.isEmpty() || pos < 0) return;
+        try {
+            JSONObject o = new JSONObject();
+            JSONArray a = new JSONArray();
+            for (Track t : order) a.put(t.path);
+            o.put("order", a); o.put("pos", pos); o.put("ms", positionMs()); o.put("playing", playing);
+            try (FileOutputStream f = new FileOutputStream(stateFile())) { f.write(o.toString().getBytes("UTF-8")); }
+        } catch (Exception ignored) { }
+        h.removeCallbacks(saver);
+        if (isPlaying()) h.postDelayed(saver, 5000);
+    }
+
+    /** Contact uit: pauzeren en onthouden dat hij speelde. Contact aan: doorspelen (als de optie aanstaat). */
+    public void onContact(boolean on) {
+        h.post(() -> {
+            if (!on) {
+                if (isPlaying()) {
+                    saveState(true);
+                    contactPausing = true; pause(); contactPausing = false;
+                    CarLogger.note("muziek: contact uit, gepauzeerd en onthouden");
+                }
+                h.removeCallbacks(resumeLater);
+            } else if (resumeEnabled() && !isPlaying()) {
+                h.removeCallbacks(resumeLater);
+                h.postDelayed(resumeLater, 6000);   // na het opstartfilmpje
+            }
+        });
+    }
+
+    private final Runnable resumeLater = () -> { resumeTries = 0; doResume(); };
+
+    private void doResume() {
+        pendingResume = false;
+        JSONObject o;
+        try (FileInputStream f = new FileInputStream(stateFile())) {
+            byte[] b = new byte[(int) stateFile().length()];
+            int n = 0; while (n < b.length) { int r = f.read(b, n, b.length - n); if (r < 0) break; n += r; }
+            o = new JSONObject(new String(b, 0, n, "UTF-8"));
+        } catch (Exception e) { return; }
+        if (!o.optBoolean("playing", false) || isPlaying()) return;
+        // zelfde wachtrij nog in het geheugen (tablet sliep alleen): gewoon verder
+        if (current() != null && mp != null && prepared) { resume(); CarLogger.note("muziek: verder na contact aan"); return; }
+        if (all().isEmpty()) {
+            if (!scanning) {
+                if (resumeTries++ >= 4) { CarLogger.note("muziek: doorspelen lukt niet, geen stick gevonden"); return; }
+                pendingResume = true; scan();
+                // stick kan nog niet gemount zijn: na een lege scan opnieuw proberen
+                h.postDelayed(() -> { if (all().isEmpty() && !scanning) { pendingResume = false; doResume(); } }, 8000);
+            } else pendingResume = true;
+            return;
+        }
+        Map<String, Track> byPath = new HashMap<>();
+        for (Track t : all()) byPath.put(t.path, t);
+        JSONArray a = o.optJSONArray("order");
+        if (a == null) return;
+        List<Track> list = new ArrayList<>();
+        int savedPos = o.optInt("pos", 0), newPos = 0;
+        for (int i = 0; i < a.length(); i++) {
+            Track t = byPath.get(a.optString(i));
+            if (t == null) continue;
+            if (i == savedPos) newPos = list.size();
+            list.add(t);
+        }
+        if (list.isEmpty()) { CarLogger.note("muziek: opgeslagen nummers niet meer op de stick"); return; }
+        queue = new ArrayList<>(list); order = new ArrayList<>(list); pos = Math.min(newPos, list.size() - 1);
+        pendingSeek = a.optString(savedPos).equals(order.get(pos).path) ? o.optInt("ms", 0) : 0;
+        CarLogger.note("muziek: verder na contact aan, " + order.get(pos).label() + " @ " + time(pendingSeek));
+        startCurrent();
     }
 }
