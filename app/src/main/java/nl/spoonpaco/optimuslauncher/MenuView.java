@@ -251,6 +251,27 @@ public class MenuView extends View {
         pt.uiText(c, tl < 0 ? Lang.t("TANKEN INVOEREN", "ENTER FUEL") : String.format(Locale.US, "~%.0f / 57 L", tl), t.left + 14, t.bottom - 8, 9, 0xFF6C6C78, Paint.Align.LEFT);
         pt.uiGlass(c, t);
         button(c, x1 - 250, 450, x1, 506, Lang.t("TANKEN", "REFUEL"), false, host::fuel);
+
+        // verbruik: kalibratie op basis van volle tankbeurten
+        label(c, Lang.t("VERBRUIK (CORRECTIE)", "CONSUMPTION (CORRECTION)"), x0, 548, YEL);
+        RectF k2 = new RectF(x0, 560, x1, 620);
+        pt.uiWindow(c, k2, YEL);
+        float[] cal = store.lastCalibration();
+        String l1, l2;
+        if (cal != null) {
+            l1 = String.format(Locale.US, Lang.t("LAATSTE: %.0f KM  ·  GESCHAT %.1f L  ·  GETANKT %.1f L  ·  ECHT %.1f KM/L",
+                    "LAST: %.0f KM  ·  ESTIMATED %.1f L  ·  FILLED %.1f L  ·  REAL %.1f KM/L"), cal[0], cal[1], cal[2], cal[2] > 0 ? cal[0] / cal[2] : 0);
+            l2 = String.format(Locale.US, Lang.t("FACTOR %.2f -> %.2f  ·  ", "FACTOR %.2f -> %.2f  ·  "), cal[3], cal[4])
+                    + new java.text.SimpleDateFormat("dd-MM-yyyy", Locale.US).format(new java.util.Date((long) (cal[5] * 1000)));
+        } else {
+            l1 = Lang.t("NOG GEEN CORRECTIE  ·  SCHATTING OP GPS", "NO CORRECTION YET  ·  GPS ESTIMATE");
+            l2 = store.hadFull()
+                    ? String.format(Locale.US, Lang.t("VOLGENDE KEER 'VOL' TANKEN (NU %.0f KM, MIN. 100)", "NEXT TIME FILL UP 'FULL' (NOW %.0f KM, MIN. 100)"), store.kmSinceFull())
+                    : Lang.t("TANK 2X VOL MET MINSTENS 100 KM ERTUSSEN", "FILL UP FULL TWICE, AT LEAST 100 KM APART");
+        }
+        pt.uiText(c, l1, k2.left + 14, k2.top + 24, 11, YEL, Paint.Align.LEFT);
+        pt.uiText(c, l2, k2.left + 14, k2.top + 46, 11, 0xFFA8A8B4, Paint.Align.LEFT);
+        pt.uiGlass(c, k2);
     }
 
     private void serviceRow(Canvas c, float x0, float top, float right, String name, String txt, float frac) {

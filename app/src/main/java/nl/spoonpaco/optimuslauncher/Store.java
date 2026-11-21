@@ -59,6 +59,14 @@ public class Store {
 
     public float calFactor() { return p.getFloat("cal", START_CAL); }
 
+    /** Laatste correctie voor het menu: {km, geschat, getankt, oud, nieuw, datum} of null. */
+    public float[] lastCalibration() {
+        if (p.getInt("calCount", 0) == 0) return null;
+        return new float[]{p.getFloat("calKm", 0), p.getFloat("calEst", 0), p.getFloat("calAdded", 0),
+                p.getFloat("calOld", 0), calFactor(), p.getLong("calDate", 0) / 1000f};
+    }
+    public boolean hadFull() { return p.getBoolean("hadFull", false); }
+
     // ---- tank ----
 
     public float tankLiters() { return p.getFloat("tank", -1f); }
@@ -89,10 +97,19 @@ public class Store {
             float km = p.getFloat("kmSinceFull", 0f);
             float est = p.getFloat("estSinceFull", 0f);
             if (hadFull && km >= 100f && est > 0.5f && addedSinceFull > 0.5f) {
-                float factor = calFactor() * (addedSinceFull / est);
-                factor = Math.max(0.6f, Math.min(1.6f, factor));
-                // rustig bijsturen: half oud, half nieuw
-                e.putFloat("cal", (calFactor() + factor) / 2f);
+                float old = calFactor();
+                float factor = Math.max(0.6f, Math.min(1.6f, old * (addedSinceFull / est)));
+                int n = p.getInt("calCount", 0);
+                // eerste echte meting: in één keer overnemen; daarna rustig bijsturen (half oud, half nieuw)
+                float nw = n == 0 ? factor : (old + factor) / 2f;
+                e.putFloat("cal", nw).putInt("calCount", n + 1)
+                 .putFloat("calEst", est).putFloat("calAdded", addedSinceFull).putFloat("calKm", km)
+                 .putFloat("calOld", old).putLong("calDate", System.currentTimeMillis());
+                CarLogger.note(String.format(java.util.Locale.US,
+                        "kalibratie: %.0f km, geschat %.1f l, getankt %.1f l -> factor %.3f -> %.3f (%.1f km/l echt)",
+                        km, est, addedSinceFull, old, nw, km / addedSinceFull));
+            } else if (hadFull) {
+                CarLogger.note(String.format(java.util.Locale.US, "kalibratie overgeslagen: %.0f km sinds vorige volle tank (min. 100)", km));
             }
             e.putFloat("tank", TANK_LITERS);
             e.putBoolean("hadFull", true);
