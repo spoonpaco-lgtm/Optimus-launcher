@@ -323,6 +323,21 @@ public final class MusicPlayer {
         updateSession(); changed();
     }
 
+    /** Direct naar een nummer in de wachtrij springen (index in de afspeelvolgorde). */
+    public void jumpTo(int orderIndex) {
+        if (orderIndex < 0 || orderIndex >= order.size()) return;
+        pos = orderIndex;
+        startCurrent();
+    }
+
+    /** Spoelen: 0..1 van de lengte van het huidige nummer. */
+    public void seekFraction(float f) {
+        int d = durationMs();
+        if (mp == null || !prepared || d <= 0) return;
+        try { mp.seekTo(Math.round(Math.max(0f, Math.min(1f, f)) * d)); } catch (Exception ignored) { }
+        updateSession(); changed();
+    }
+
     public void next() {
         if (order.isEmpty()) return;
         pos = (pos + 1) % order.size();

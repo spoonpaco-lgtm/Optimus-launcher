@@ -29,6 +29,7 @@ public class MusicPanel extends View {
     private final Host host;
     private final boolean floating;
     private boolean movingWindow; private float mwX, mwY;
+    private float upX;   // x van de laatste tik (ontwerp-eenheden), voor spoelen
     private final CockpitView pt;
     private final Theme theme;
     private float s = 1f, H = 650f;
@@ -83,7 +84,7 @@ public class MusicPanel extends View {
                 if (dragging) return true;
                 for (int i = hits.size() - 1; i >= 0; i--) {
                     RectF r = (RectF) hits.get(i)[0];
-                    if (r.contains(x, y)) { ((Runnable) hits.get(i)[1]).run(); invalidate(); return true; }
+                    if (r.contains(x, y)) { upX = x; ((Runnable) hits.get(i)[1]).run(); invalidate(); return true; }
                 }
                 return true;
         }
@@ -120,8 +121,15 @@ public class MusicPanel extends View {
         }
         drawList(c, key);
 
-        // ---- rechts: hoes + nu speelt ----
+        // ---- rechts: hoes + nu speelt (tijdens zoeken: de resultaten) ----
         float X = 536;
+        if (searching) {
+            drawRows(c, key, searchResults, new RectF(X, 26, 1216, H - 90), 72);
+            drawBottomButtons(c, key, X);
+            c.restore();
+            c.save(); c.scale(s, s); pt.uiScanlines(c, 1240, H); c.restore();
+            return;
+        }
         RectF ar = new RectF(X, 26, X + 236, 262);
         pt.uiWindow(c, ar, key);
         Bitmap art = mp.art();
@@ -156,8 +164,10 @@ public class MusicPanel extends View {
         }
         c.restore();
         int dur = mp.durationMs(), posMs = mp.positionMs();
-        int lit = dur > 0 ? Math.round(30f * posMs / dur) : 0;
-        pt.uiBar(c, np.left + 18, np.bottom - 40, np.right - 150, 12, 24, lit, 2);
+        int lit = dur > 0 ? Math.round(24f * posMs / dur) : 0;
+        final RectF pb = new RectF(np.left + 18, np.bottom - 50, np.right - 150, np.bottom - 26);
+        pt.uiBar(c, pb.left, pb.top, pb.right, pb.height(), 24, lit, 2);
+        hit(new RectF(pb.left - 6, pb.top - 16, pb.right + 6, pb.bottom + 14), () -> mp.seekFraction((upX - pb.left) / pb.width()));
         if (t != null) {
             pt.uiSegRight(c, MusicPlayer.time(posMs), np.right - 18, np.bottom - 70, 30, AMB);
             pt.uiText(c, "/ " + MusicPlayer.time(dur), np.right - 18, np.bottom - 14, 13, dim(AMB), Paint.Align.RIGHT);
@@ -176,6 +186,8 @@ public class MusicPanel extends View {
             c.drawRoundRect(sc.left + 12 + i * gw + 2, sc.top + 9, sc.left + 12 + (i + 1) * gw - 2, sc.bottom - 9, 2, 2, q);
         }
         pt.uiGlass(c, sc);
+        final RectF scf = new RectF(sc);
+        hit(scf, () -> mp.seekFraction((upX - scf.left - 12) / (scf.width() - 24)));
 
         // knoppen
         float bw = (nr - X - 48) / 4f, by = 300;
@@ -191,18 +203,28 @@ public class MusicPanel extends View {
         pt.uiText(c, Lang.t("HIERNA", "UP NEXT"), X, by + 108, 13, dim(AMB), Paint.Align.LEFT);
         float y = by + 120;
         int k = mp.queueIndex() + 2;
+        int jump = mp.queueIndex();
         for (MusicPlayer.Track u : mp.upNext(3)) {
             if (y + 50 > H - 80) break;
             RectF r = new RectF(X, y, nr, y + 50);
+            final int target = ++jump;
+            hit(r, () -> mp.jumpTo(target));
             pt.uiWindow(c, r, key);
             c.save(); c.clipRect(r.left, r.top, r.right - 90, r.bottom);
             pt.uiText(c, String.valueOf(k++), r.left + 18, r.centerY() + 7, 17, dim(AMB), Paint.Align.LEFT);
             pt.uiText(c, u.label().toUpperCase(Locale.ROOT) + (u.artist.isEmpty() ? "" : "  ·  " + u.artist.toUpperCase(Locale.ROOT)), r.left + 60, r.centerY() + 7, 17, 0xFFE0E0E8, Paint.Align.LEFT);
             c.restore();
-            if (u.dur > 0) pt.uiText(c, MusicPlayer.time(u.dur), r.right - 18, r.centerY() + 7, 15, 0xFFB4B4C0, Paint.Align.RIGHT);
+            if (u.dur > 0) pt.uiText(c, MusicPlayer.time(u.dur), r.right - 30, r.centerY() + 7, 15, 0xFFB4B4C0, Paint.Align.RIGHT);
+            pt.uiText(c, ">", r.right - 8, r.centerY() + 7, 15, 0xFF8E8E9A, Paint.Align.RIGHT);
             pt.uiGlass(c, r);
             y += 58;
         }
+        drawBottomButtons(c, key, X);
+        c.restore();
+        c.save(); c.scale(s, s); pt.uiScanlines(c, 1240, H); c.restore();
+    }
+
+    private void drawBottomButtons(Canvas c, int key, float X) {
         RectF close = new RectF(X, H - 70, X + 220, H - 20);
         pt.uiButton(c, close, floating ? Lang.t("INKLAPPEN", "COLLAPSE") : Lang.t("SLUITEN", "CLOSE"), true, key, 15);
         hit(close, host::close);
@@ -215,8 +237,6 @@ public class MusicPanel extends View {
             pt.uiButton(c, rs, Lang.t("STICK OPNIEUW LEZEN", "RESCAN STICK"), false, key, 13);
             hit(rs, mp::scan);
         }
-        c.restore();
-        c.save(); c.scale(s, s); pt.uiScanlines(c, 1240, H); c.restore();
     }
 
     /** Indeling per tabblad: welke niveaus je doorklikt voordat je bij de nummers komt. */
@@ -298,10 +318,20 @@ public class MusicPanel extends View {
                 }
             }
         }
-        RectF la = listArea;
-        if (searching) la = drawSearchBox(c, key);
+        if (searching) {
+            drawSearchBox(c, key);
+            searchResults = rows;
+            return;
+        }
+        drawRows(c, key, rows, listArea, 80);
+    }
+
+    private List<Object[]> searchResults = new ArrayList<>();
+
+    /** Lijst met regels {label, sub, actie, speelt} in een vak, scrollbaar. */
+    private void drawRows(Canvas c, int key, List<Object[]> rows, RectF la, float rowH) {
         curList.set(la);
-        float rowH = searching ? 66 : 80, top = la.top;
+        float top = la.top;
         float maxScroll = Math.max(0, rows.size() * rowH - la.height());
         if (scroll > maxScroll) scroll = maxScroll;
         c.save(); c.clipRect(la);
@@ -314,19 +344,19 @@ public class MusicPanel extends View {
             else { Paint q = new Paint(); q.setColor(0xFF121216); c.drawRoundRect(r, 5, 5, q); }
             pt.uiLamp(c, r.left + 20, r.centerY(), 7, key, on);
             c.save(); c.clipRect(r.left, r.top, r.right - 24, r.bottom);
-            pt.uiText(c, String.valueOf(rows.get(i)[0]).toUpperCase(Locale.ROOT), r.left + 42, r.top + (searching ? 27 : 32), searching ? 17 : 19, on ? key : 0xFFE8E8F0, Paint.Align.LEFT);
-            pt.uiText(c, String.valueOf(rows.get(i)[1]).toUpperCase(Locale.ROOT), r.left + 42, r.top + (searching ? 49 : 58), 12, 0xFFA8A8B4, Paint.Align.LEFT);
+            float ts = rowH >= 76 ? 19 : 18;
+            pt.uiText(c, String.valueOf(rows.get(i)[0]).toUpperCase(Locale.ROOT), r.left + 42, r.top + rowH * 0.4f, ts, on ? key : 0xFFE8E8F0, Paint.Align.LEFT);
+            pt.uiText(c, String.valueOf(rows.get(i)[1]).toUpperCase(Locale.ROOT), r.left + 42, r.top + rowH * 0.72f, 12, 0xFFA8A8B4, Paint.Align.LEFT);
             c.restore();
             pt.uiText(c, ">", r.right - 10, r.centerY() + 7, 18, 0xFF8E8E9A, Paint.Align.RIGHT);
             if (on) pt.uiGlass(c, r);
-            // alleen tikbaar als zichtbaar
             RectF hr = new RectF(r.left, Math.max(r.top, la.top), r.right, Math.min(r.bottom, la.bottom));
             if (hr.height() > 10) hit(hr, (Runnable) rows.get(i)[2]);
         }
         c.restore();
-        if (rows.isEmpty()) pt.uiText(c, searching ? (query.length() == 0 ? Lang.t("TYP EEN ARTIEST, ALBUM OF NUMMER", "TYPE AN ARTIST, ALBUM OR SONG") : Lang.t("NIETS GEVONDEN", "NOTHING FOUND"))
+        if (rows.isEmpty()) pt.uiText(c, searching ? (query.length() == 0 ? Lang.t("TYP LINKS EEN ARTIEST, ALBUM OF NUMMER", "TYPE AN ARTIST, ALBUM OR SONG ON THE LEFT") : Lang.t("NIETS GEVONDEN", "NOTHING FOUND"))
                 : mp.scanning ? Lang.t("BEZIG MET LEZEN...", "READING...") : Lang.t("GEEN MUZIEK GEVONDEN", "NO MUSIC FOUND"),
-                la.left + 10, la.top + 40, 14, 0xFF8E8E9A, Paint.Align.LEFT);
+                la.left + 10, la.top + 40, 15, 0xFF8E8E9A, Paint.Align.LEFT);
     }
 
     private final RectF curList = new RectF();
@@ -344,7 +374,7 @@ public class MusicPanel extends View {
         postInvalidateDelayed(500);
 
         String[] rowsK = {"1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"};
-        float gap = 6, kh = 54, kbTop = listArea.bottom - 5 * kh - 4 * gap;
+        float gap = 7, kbTop = q.bottom + 16, kh = (listArea.bottom - kbTop - 4 * gap) / 5f;
         float kw = (listArea.width() - 9 * gap) / 10f;
         for (int rI = 0; rI < 4; rI++) {
             String r = rowsK[rI];
@@ -353,7 +383,7 @@ public class MusicPanel extends View {
                 final String ch = String.valueOf(r.charAt(i));
                 RectF kr = new RectF(listArea.left + off + i * (kw + gap), kbTop + rI * (kh + gap),
                         listArea.left + off + i * (kw + gap) + kw, kbTop + rI * (kh + gap) + kh);
-                pt.uiKey(c, kr, ch, false, key, 19);
+                pt.uiKey(c, kr, ch, false, key, 26);
                 hit(kr, () -> { if (query.length() < 30) query.append(ch); scroll = 0; });
             }
         }
@@ -362,13 +392,13 @@ public class MusicPanel extends View {
         RectF sp = new RectF(listArea.left, by, listArea.left + w3 * 0.5f, by + kh);
         RectF bs = new RectF(sp.right + gap, by, sp.right + gap + w3 * 0.25f, by + kh);
         RectF cl = new RectF(bs.right + gap, by, listArea.right, by + kh);
-        pt.uiKey(c, sp, Lang.t("SPATIE", "SPACE"), false, key, 15);
-        pt.uiKey(c, bs, "<", false, key, 19);
-        pt.uiKey(c, cl, Lang.t("WIS", "CLEAR"), false, key, 15);
+        pt.uiKey(c, sp, Lang.t("SPATIE", "SPACE"), false, key, 18);
+        pt.uiKey(c, bs, "<", false, key, 26);
+        pt.uiKey(c, cl, Lang.t("WIS", "CLEAR"), false, key, 18);
         hit(sp, () -> { if (query.length() > 0 && query.charAt(query.length() - 1) != ' ') query.append(' '); });
         hit(bs, () -> { if (query.length() > 0) query.setLength(query.length() - 1); scroll = 0; });
         hit(cl, () -> { query.setLength(0); scroll = 0; });
-        return new RectF(listArea.left, q.bottom + 8, listArea.right, kbTop - 10);
+        return q;
     }
 
     /** Zoekresultaten: artiesten, albums en nummers waar de zoektekst in voorkomt. */

@@ -165,7 +165,7 @@ final class MediaOverlay {
             pt.uiGlass(c, tw);
 
             int lit = dur > 0 ? Math.round(24f * pos / dur) : 0;
-            pt.uiBar(c, 16, 246, W - 16, 8, 24, lit, 2);
+            pt.uiBar(c, 16, 242, W - 16, 14, 24, lit, 2);
 
             float kw = (W - 28 - 16) / 3f;
             boolean fresh = System.currentTimeMillis() - pressedAt < 220;
@@ -192,6 +192,11 @@ final class MediaOverlay {
                     if (moved) { prefs().edit().putInt("mvX2", lp.x).putInt("mvY2", lp.y).apply(); return true; }
                     float x = e.getX() / u, y = e.getY() / u;
                     MusicPlayer mp = MusicPlayer.get(getContext());
+                    if (y > 232 && y < 262 && x > 10 && x < W - 10) {   // voortgangsbalk: spoelen
+                        mp.seekFraction((x - 16) / (W - 32));
+                        invalidate();
+                        return true;
+                    }
                     for (int i = 0; i < 3; i++) {
                         RectF k = keys[i];
                         if (x > k.left - 4 && x < k.right + 4 && y > k.top - 8 && y < k.bottom + 8) {
