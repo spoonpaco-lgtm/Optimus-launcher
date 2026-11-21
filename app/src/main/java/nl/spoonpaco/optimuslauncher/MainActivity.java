@@ -459,6 +459,7 @@ public class MainActivity extends Activity {
         menuDlg = new android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         menuDlg.setContentView(menuView);
         menuDlg.show();
+        Immersive.apply(menuDlg.getWindow());
     }
 
     /** Rij van gelijke keuzeknoppen. */
@@ -723,6 +724,7 @@ public class MainActivity extends Activity {
                 .create();
         card.setOnClickListener(v -> { store.clearSummary(); summaryDialog.dismiss(); });
         summaryDialog.show();
+        Immersive.apply(summaryDialog.getWindow());
         if (summaryDialog.getWindow() != null) {
             summaryDialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0));
         }
@@ -815,6 +817,7 @@ public class MainActivity extends Activity {
                 .setView(grid)
                 .create();
         dlg[0].show();
+        Immersive.apply(dlg[0].getWindow());
     }
 
     private void showFuelDialog() {
@@ -913,6 +916,11 @@ public class MainActivity extends Activity {
 
     /** Laatst gemaakte MainActivity (voor de afstandsbediening). */
     static MainActivity instance;
+
+    @Override public void onWindowFocusChanged(boolean has) {
+        super.onWindowFocusChanged(has);
+        if (has) Immersive.apply(getWindow());
+    }
 
     /** Huidig thema (voor vensters buiten de launcher-activity). */
     static Theme currentTheme() { return instance != null ? instance.theme : Theme.LED; }

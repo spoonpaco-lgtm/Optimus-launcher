@@ -47,6 +47,7 @@ public final class InputForm {
         v.alt = alt == null ? null : () -> { alt.run(); dlg.dismiss(); };
         dlg.setContentView(v);
         dlg.show();
+        Immersive.apply(dlg.getWindow());
     }
 
     /** Keuzelijst in cockpitstijl (bv. locaties). Tik op een regel = pick(index). */
@@ -54,6 +55,7 @@ public final class InputForm {
         final Dialog dlg = new Dialog(a, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         dlg.setContentView(new ListView2(a, MainActivity.currentTheme(), title, sub, labels, subs, i -> { dlg.dismiss(); pick.accept(i); }, dlg::dismiss));
         dlg.show();
+        Immersive.apply(dlg.getWindow());
     }
 
     private static final class ListView2 extends View {

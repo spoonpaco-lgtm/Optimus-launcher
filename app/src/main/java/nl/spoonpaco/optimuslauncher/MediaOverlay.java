@@ -26,7 +26,9 @@ final class MediaOverlay {
     private Card card;
     private WindowManager.LayoutParams lp;
     private long lastPlaying;
-    private MusicPanel full;                         // uitgeklapte speler (Winamp-stijl)
+    private MusicPanel full;
+    private android.widget.FrameLayout fullRoot, cardRoot;
+    private MarqueeLines cardText;                         // uitgeklapte speler (Winamp-stijl)
     private WindowManager.LayoutParams flp;
     private final MusicPlayer.Listener fullListener = () -> { if (full != null) full.invalidate(); };
 
@@ -65,7 +67,14 @@ final class MediaOverlay {
         // standaard: precies over de mediakaart rechts in Android Auto
         lp.x = prefs().getInt("mvX2", Math.round(dm.widthPixels * 0.703f));
         lp.y = prefs().getInt("mvY2", Math.round(dm.heightPixels * 0.36f));
-        try { wm.addView(card, lp); } catch (Exception e) { card = null; }
+        // tekstvlak voor titel/artiest/album dat zelf doorloopt (alleen dat stukje wordt steeds getekend)
+        cardRoot = new android.widget.FrameLayout(ctx);
+        cardRoot.addView(card, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        cardText = new MarqueeLines(ctx, Theme.byId(prefs().getString("theme", "led")), u);
+        android.widget.FrameLayout.LayoutParams tl = new android.widget.FrameLayout.LayoutParams(Math.round((W - 14 - 8 - 26) * u), Math.round(92 * u));
+        tl.leftMargin = Math.round(26 * u); tl.topMargin = Math.round(142 * u);
+        cardRoot.addView(cardText, tl);
+        try { wm.addView(cardRoot, lp); } catch (Exception e) { card = null; cardRoot = null; }
     }
 
     /** Tik op de mini-speler: de volledige speler zwevend tonen. */
@@ -83,7 +92,7 @@ final class MediaOverlay {
             }
             @Override public void drag(float dx, float dy) {
                 flp.x += Math.round(dx); flp.y += Math.round(dy);
-                try { wm.updateViewLayout(full, flp); } catch (Exception ignored) { }
+                try { wm.updateViewLayout(fullRoot, flp); } catch (Exception ignored) { }
             }
             @Override public void dragEnd() { prefs().edit().putInt("mfX", flp.x).putInt("mfY", flp.y).apply(); }
         }, true);
@@ -94,7 +103,8 @@ final class MediaOverlay {
         flp.gravity = Gravity.TOP | Gravity.START;
         flp.x = prefs().getInt("mfX", (dm.widthPixels - w) / 2);
         flp.y = prefs().getInt("mfY", (dm.heightPixels - h) / 2);
-        try { wm.addView(full, flp); } catch (Exception e) { full = null; return; }
+        fullRoot = MusicPanel.wrap(full);
+        try { wm.addView(fullRoot, flp); } catch (Exception e) { full = null; fullRoot = null; return; }
         MusicPlayer.get(ctx).addListener(fullListener);
         full.tick();
         remove();
@@ -104,13 +114,14 @@ final class MediaOverlay {
         if (full == null) return;
         MusicPlayer.get(ctx).removeListener(fullListener);
         full.removeCallbacks(full.ticker);
-        try { wm.removeView(full); } catch (Exception ignored) { }
+        try { wm.removeView(fullRoot); } catch (Exception ignored) { }
+        fullRoot = null;
         full = null;
     }
 
     void remove() {
-        if (card != null && wm != null) { try { wm.removeView(card); } catch (Exception ignored) { } }
-        card = null;
+        if (cardRoot != null && wm != null) { try { wm.removeView(cardRoot); } catch (Exception ignored) { } }
+        card = null; cardRoot = null; cardText = null;
     }
 
     private final class Card extends View {
@@ -159,10 +170,10 @@ final class MediaOverlay {
             RectF tw = new RectF(14, 138, W - 14, 236);
             pt.uiWindow(c, tw, AMB);
             c.save(); c.clipRect(tw.left + 6, tw.top, tw.right - 6, tw.bottom);
-            if (t != null) {
-                pt.uiText(c, t.label().toUpperCase(Locale.ROOT), tw.left + 12, tw.top + 32, 22, AMB, Paint.Align.LEFT);
-                pt.uiText(c, (t.artist.isEmpty() ? "-" : t.artist).toUpperCase(Locale.ROOT), tw.left + 12, tw.top + 60, 17, 0xFFF0CC88, Paint.Align.LEFT);
-                pt.uiText(c, t.album.toUpperCase(Locale.ROOT), tw.left + 12, tw.top + 84, 13, 0xFFD8B070, Paint.Align.LEFT);
+            if (t != null && cardText != null) {
+                cardText.set(0, t.label().toUpperCase(Locale.ROOT), 22, AMB, 28, 0);
+                cardText.set(1, (t.artist.isEmpty() ? "-" : t.artist).toUpperCase(Locale.ROOT), 17, 0xFFF0CC88, 56, 0);
+                cardText.set(2, t.album.toUpperCase(Locale.ROOT), 13, 0xFFD8B070, 80, 0);
             }
             c.restore();
             pt.uiGlass(c, tw);
@@ -188,7 +199,7 @@ final class MediaOverlay {
                 case MotionEvent.ACTION_MOVE: {
                     int dx = (int) (e.getRawX() - dX), dy = (int) (e.getRawY() - dY);
                     if (Math.abs(dx) > 14 || Math.abs(dy) > 14) moved = true;
-                    if (moved) { lp.x = sX + dx; lp.y = sY + dy; try { wm.updateViewLayout(this, lp); } catch (Exception ignored) { } }
+                    if (moved) { lp.x = sX + dx; lp.y = sY + dy; try { wm.updateViewLayout(cardRoot, lp); } catch (Exception ignored) { } }
                     return true;
                 }
                 case MotionEvent.ACTION_UP: {

@@ -30,6 +30,30 @@ public class MusicPanel extends View {
     private final boolean floating;
     private boolean movingWindow; private float mwX, mwY;
     private float upX;   // x van de laatste tik (ontwerp-eenheden), voor spoelen
+    private MarqueeLines marquee;
+    private final android.graphics.Rect mqPx = new android.graphics.Rect();
+
+    /** Paneel + doorlopende-tekstvlak samen in één container (gebruik die als scherm/venster). */
+    public static android.widget.FrameLayout wrap(MusicPanel p) {
+        android.widget.FrameLayout f = new android.widget.FrameLayout(p.getContext());
+        f.addView(p, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        p.marquee = new MarqueeLines(p.getContext(), p.theme, 1f);
+        f.addView(p.marquee, new android.widget.FrameLayout.LayoutParams(1, 1));
+        return f;
+    }
+
+    private void placeMarquee(RectF d) {
+        android.graphics.Rect px = new android.graphics.Rect(Math.round(d.left * s), Math.round(d.top * s), Math.round(d.right * s), Math.round(d.bottom * s));
+        if (px.equals(mqPx)) return;
+        mqPx.set(px);
+        final float unit = s;
+        post(() -> {
+            android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(px.width(), px.height());
+            lp.leftMargin = px.left; lp.topMargin = px.top;
+            marquee.setLayoutParams(lp);
+            marquee.setUnit(unit);
+        });
+    }
     private final CockpitView pt;
     private final Theme theme;
     private float s = 1f, H = 650f;
@@ -156,18 +180,28 @@ public class MusicPanel extends View {
         pt.uiWindow(c, np, AMB);
         c.save(); c.clipRect(np.left + 8, np.top, np.right - 8, np.bottom);
         if (t != null) {
-            pt.uiText(c, t.label().toUpperCase(Locale.ROOT), np.left + 18, np.top + 48, 26, AMB, Paint.Align.LEFT);
-            pt.uiText(c, (t.artist.isEmpty() ? "-" : t.artist).toUpperCase(Locale.ROOT), np.left + 18, np.top + 84, 20, 0xFFF0CC88, Paint.Align.LEFT);
-            c.save(); c.clipRect(np.left, np.top, np.right - 170, np.bottom);
-            pt.uiText(c, (t.album.isEmpty() ? "" : t.album.toUpperCase(Locale.ROOT) + "  ·  ")
-                    + String.format(Locale.US, Lang.t("NUMMER %d VAN %d", "TRACK %d OF %d"), mp.queueIndex() + 1, mp.queueSize()),
-                    np.left + 18, np.top + 112, 13, dim(AMB), Paint.Align.LEFT);
-            c.restore();
+            String album = (t.album.isEmpty() ? "" : t.album.toUpperCase(Locale.ROOT) + "  ·  ")
+                    + String.format(Locale.US, Lang.t("NUMMER %d VAN %d", "TRACK %d OF %d"), mp.queueIndex() + 1, mp.queueSize());
+            if (marquee != null) {
+                // lange tekst loopt door in een eigen klein vlak (niet het hele scherm opnieuw tekenen)
+                placeMarquee(new RectF(np.left + 18, np.top + 4, np.right - 10, np.top + 124));
+                marquee.set(0, t.label().toUpperCase(Locale.ROOT), 26, AMB, 44, 0);
+                marquee.set(1, (t.artist.isEmpty() ? "-" : t.artist).toUpperCase(Locale.ROOT), 20, 0xFFF0CC88, 80, 0);
+                marquee.set(2, album, 13, dim(AMB), 108, np.width() - 18 - 170 - 10);
+            } else {
+                pt.uiText(c, t.label().toUpperCase(Locale.ROOT), np.left + 18, np.top + 48, 26, AMB, Paint.Align.LEFT);
+                pt.uiText(c, (t.artist.isEmpty() ? "-" : t.artist).toUpperCase(Locale.ROOT), np.left + 18, np.top + 84, 20, 0xFFF0CC88, Paint.Align.LEFT);
+                c.save(); c.clipRect(np.left, np.top, np.right - 170, np.bottom);
+                pt.uiText(c, album, np.left + 18, np.top + 112, 13, dim(AMB), Paint.Align.LEFT);
+                c.restore();
+            }
         } else if (bt) {
+            if (marquee != null) marquee.clear();
             pt.uiText(c, BtMedia.title.toUpperCase(Locale.ROOT), np.left + 18, np.top + 48, 26, AMB, Paint.Align.LEFT);
             pt.uiText(c, String.valueOf(BtMedia.artist).toUpperCase(Locale.ROOT), np.left + 18, np.top + 82, 16, 0xFFE6BE78, Paint.Align.LEFT);
             pt.uiText(c, Lang.t("VIA BLUETOOTH (TELEFOON)", "VIA BLUETOOTH (PHONE)"), np.left + 18, np.top + 110, 10, dim(AMB), Paint.Align.LEFT);
         } else {
+            if (marquee != null) marquee.clear();
             pt.uiText(c, mp.scanning ? Lang.t("STICK WORDT GELEZEN...", "READING STICK...") + " " + mp.indexed
                     : !hasPerm() ? Lang.t("TOESTEMMING NODIG", "PERMISSION NEEDED")
                     : mp.root == null ? Lang.t("GEEN USB-STICK GEVONDEN", "NO USB STICK FOUND")

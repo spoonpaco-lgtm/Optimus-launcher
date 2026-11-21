@@ -61,6 +61,7 @@ public final class Remote {
             @Override public void onActivityResumed(Activity a) {
                 if (a instanceof RemoteActivity) return;
                 top = new WeakReference<>(a); resumed++;
+                Immersive.apply(a.getWindow());
             }
             @Override public void onActivityCreated(Activity a, Bundle b) { }
             @Override public void onActivityStarted(Activity a) { }

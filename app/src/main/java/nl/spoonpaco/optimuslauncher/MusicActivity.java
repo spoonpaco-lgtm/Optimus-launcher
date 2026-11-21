@@ -18,7 +18,7 @@ public class MusicActivity extends Activity implements MusicPlayer.Listener {
             @Override public void close() { finish(); }
             @Override public void requestPerm() { requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 7); }
         }, false);
-        setContentView(v);
+        setContentView(MusicPanel.wrap(v));
         if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 7);
         else if (mp.all().isEmpty() && !mp.scanning) mp.scan();
