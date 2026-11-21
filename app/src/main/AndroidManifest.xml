@@ -70,6 +70,13 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <activity
+            android:name=".MusicActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|uiMode" />
+
+        <activity
             android:name=".TripLogActivity"
             android:exported="false"
             android:screenOrientation="landscape"

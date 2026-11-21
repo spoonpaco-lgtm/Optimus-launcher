@@ -22,7 +22,14 @@ public class CockpitView extends View {
         void onSpeedTap();
         void onClockLongPress();
         void onTankTap();
+        default void onMusicTap() { }
     }
+
+    // ---- nu speelt (wisselt elke 10 s met het kompas) ----
+    public boolean npShow;
+    public String npTitle = "", npArtist = "", npSub = "", npSrc = "", npTime = "", npTotal = "";
+    public float npFrac;
+    private final RectF rBand = new RectF(310, 0, 1064, 62);
 
     // ---- live waarden (gezet door MainActivity) ----
     public long now;
@@ -249,8 +256,9 @@ public class CockpitView extends View {
         p.setLetterSpacing(0f);
         }
 
-        // kompas
+        // kompas (of "nu speelt" als er muziek speelt, om de 10 s wisselend)
         RectF r = new RectF(312, 4, 1062, 58);
+        if (npShow && (System.currentTimeMillis() / 10000) % 2 == 1) drawNowPlaying(c, r); else {
         c.save();
         c.clipRect(r);
         float hd = heading < 0 ? 0 : heading;
@@ -310,16 +318,40 @@ public class CockpitView extends View {
         c.drawPath(tri, p);
         }
 
+        }
+
         // koers-display
+        String[] hn = Lang.en ? new String[]{"N", "NE", "E", "SE", "S", "SW", "W", "NW"} : new String[]{"N", "NO", "O", "ZO", "Z", "ZW", "W", "NW"};
         RectF hr = new RectF(1080, 2, 1240, 60);
         if (heading >= 0) {
             int h = Math.round(heading) % 360;
-            text(c, names[Math.round(h / 45f) % 8], 1094, 38, 14, AMB);
+            text(c, hn[Math.round(h / 45f) % 8], 1094, 38, 14, AMB);
             drawSeg(c, String.format(Locale.US, "%03d", h), 1140, 16, 28, AMB);
         } else {
             drawSeg(c, "---", 1140, 16, 28, AMB);
         }
         glass(c, hr);
+    }
+
+    private void drawNowPlaying(Canvas c, RectF r) {
+        window(c, r, tAmb, eAmb);
+        lampAt(c, r.left + 20, r.centerY(), 7, GRN, true);
+        text(c, npSrc, r.left + 34, r.centerY() + 4, 10, GRN);
+        c.save();
+        c.clipRect(r.left + 76, r.top, r.right - 330, r.bottom);
+        String main = npTitle + (npArtist.isEmpty() ? "" : "  ·  " + npArtist);
+        text(c, main.toUpperCase(Locale.ROOT), r.left + 82, r.top + 26, 17, AMB);
+        text(c, npSub.toUpperCase(Locale.ROOT), r.left + 82, r.bottom - 8, 9, dark(AMB, 0.65f));
+        c.restore();
+        int lit = Math.round(Math.max(0f, Math.min(1f, npFrac)) * 26);
+        bar(c, r.right - 320, r.bottom - 18, r.right - 92, 8, 26, lit, 2, 0, 0);
+        p.setTextAlign(Paint.Align.RIGHT);
+        if (!npTime.isEmpty()) {
+            drawSeg(c, npTime, r.right - 14 - segWidth(npTime, 20), r.top + 6, 20, AMB);
+            text(c, npTotal, r.right - 14, r.bottom - 6, 9, dark(AMB, 0.65f));
+        }
+        p.setTextAlign(Paint.Align.LEFT);
+        glass(c, r);
     }
 
     private void drawSpeedPanel(Canvas c) {
@@ -841,7 +873,8 @@ public class CockpitView extends View {
                 removeCallbacks(longPress);
                 if (downInClock) { downInClock = false; return true; }
                 if (listener == null) return true;
-                if (rTank.contains(x, y)) listener.onTankTap();
+                if (rBand.contains(x, y)) listener.onMusicTap();
+                else if (rTank.contains(x, y)) listener.onTankTap();
                 else if (rSpeed.contains(x, y)) listener.onSpeedTap();
                 performClick();
                 return true;

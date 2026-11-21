@@ -31,7 +31,15 @@ public class ScannerView extends View {
 
     public ScannerView(Context c, AttributeSet a) { super(c, a); }
 
-    public void setTheme(Theme t) { col = t.speed; leds = t.leds; invalidate(); }
+    public void setTheme(Theme t) { col = dimBy(t.speed, 0.8f); leds = t.leds; invalidate(); }
+
+    private static int dimBy(int c, float f) {
+        return 0xFF000000 | ((int) (((c >> 16) & 0xFF) * f) << 16) | ((int) (((c >> 8) & 0xFF) * f) << 8) | (int) ((c & 0xFF) * f);
+    }
+
+    /** Muziek: één keer heen en terug, dan 15 s stil, dan weer. */
+    private long lastSweepEnd = 0L;
+    private static final long REST_MS = 15_000L;
 
     /** Eén keer heen en terug (opstarten). */
     public void sweepOnce() { sweepsLeft = 2; head = 0; dir = 1; kick(); }
@@ -46,11 +54,13 @@ public class ScannerView extends View {
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
-            boolean animate = playing || sweepsLeft > 0;
+            long nowMs = android.os.SystemClock.elapsedRealtime();
+            if (playing && sweepsLeft == 0 && nowMs - lastSweepEnd > REST_MS) { sweepsLeft = 2; head = 0; dir = 1; }
+            boolean animate = sweepsLeft > 0;
             if (animate) {
                 head += dir * 0.9f;
                 if (head >= N - 1) { head = N - 1; dir = -1; if (sweepsLeft > 0) sweepsLeft--; }
-                if (head <= 0) { head = 0; dir = 1; if (sweepsLeft > 0) sweepsLeft--; }
+                if (head <= 0) { head = 0; dir = 1; if (sweepsLeft > 0) sweepsLeft--; if (sweepsLeft == 0) lastSweepEnd = nowMs; }
             }
             for (int i = 0; i < N; i++) lvl[i] *= 0.72f;      // uitdovende staart
             if (animate) {
@@ -60,6 +70,7 @@ public class ScannerView extends View {
             float max = 0; for (float v : lvl) max = Math.max(max, v);
             invalidate((int) strip.left, (int) strip.top - 20, (int) strip.right, (int) strip.bottom + 20);
             if (animate || warn > 0 || max > 0.02f) postDelayed(this, 40);
+            else if (playing) postDelayed(this, 500);       // rustpauze: zuinig wachten op de volgende sweep
             else running = false;
         }
     };
@@ -102,9 +113,9 @@ public class ScannerView extends View {
             int segCol = L > lvl[i] ? base : col;
             if (L > 0.05f) {
                 // gloed: twee lagen halfdoorzichtig, groter dan het segment
-                p.setColor(withAlpha(segCol, (int) (60 * L)));
+                p.setColor(withAlpha(segCol, (int) (48 * L)));
                 c.drawRoundRect(x - 6 * s, y0 - 6 * s, x + segW + 6 * s, y1 + 6 * s, 8 * s, 8 * s, p);
-                p.setColor(withAlpha(segCol, (int) (90 * L)));
+                p.setColor(withAlpha(segCol, (int) (72 * L)));
                 c.drawRoundRect(x - 3 * s, y0 - 3 * s, x + segW + 3 * s, y1 + 3 * s, 6 * s, 6 * s, p);
             }
             p.setColor(mix(dim(segCol), segCol, L));

@@ -89,6 +89,7 @@ public class MainActivity extends Activity {
         handleMenuExtra(getIntent());
         cockpit.listener = new CockpitView.Listener() {
             @Override public void onSpeedTap() { toggleOverlay(); }
+            @Override public void onMusicTap() { startActivity(new Intent(MainActivity.this, MusicActivity.class)); }
             @Override public void onClockLongPress() { startActivity(new Intent(MainActivity.this, DebugActivity.class)); }
             @Override public void onTankTap() { showFuelDialog(); }
         };
@@ -488,7 +489,19 @@ public class MainActivity extends Activity {
         c.lTrips = WorkLog.flag(this);
         c.accuWarn = BatteryHealth.level;
         c.lAuto = aaSeenRecently;
-        if (scanner != null) scanner.update(CarSignals.mcu04 == 1, Math.max(BatteryHealth.level, store.serviceDue(Clock.now()) ? 1 : 0));
+        // nu speelt: eigen speler (USB) of telefoon via Bluetooth
+        MusicPlayer mpl = MusicPlayer.get(this);
+        MusicPlayer.Track nt = mpl.current();
+        if (mpl.isPlaying() && nt != null) {
+            c.npShow = true; c.npSrc = "USB"; c.npTitle = nt.label(); c.npArtist = nt.artist;
+            c.npSub = (nt.album.isEmpty() ? "" : nt.album + "   ") + (mpl.queueIndex() + 1) + "/" + mpl.queueSize();
+            int du = mpl.durationMs(), po = mpl.positionMs();
+            c.npFrac = du > 0 ? po / (float) du : 0; c.npTime = MusicPlayer.time(po); c.npTotal = MusicPlayer.time(du);
+        } else if (BtMedia.playing && BtMedia.title != null && !BtMedia.title.isEmpty()) {
+            c.npShow = true; c.npSrc = "BT"; c.npTitle = BtMedia.title; c.npArtist = BtMedia.artist == null ? "" : BtMedia.artist;
+            c.npSub = BtMedia.album == null ? "" : BtMedia.album; c.npFrac = 0; c.npTime = ""; c.npTotal = "";
+        } else c.npShow = false;
+        if (scanner != null) scanner.update(CarSignals.mcu04 == 1 || mpl.isPlaying(), Math.max(BatteryHealth.level, store.serviceDue(Clock.now()) ? 1 : 0));
         c.lLog = CarLogger.state == 2;
         c.invalidate();
     }
@@ -897,6 +910,7 @@ public class MainActivity extends Activity {
                 switch (w) {
                     case "triplog": startActivity(new Intent(this, TripLogActivity.class)); break;
                     case "debug": startActivity(new Intent(this, DebugActivity.class)); break;
+                    case "music": startActivity(new Intent(this, MusicActivity.class)); break;
                     case "fuel": showFuelDialog(); break;
                     case "maintenance": Dialogs.maintenance(this, store, () -> { if (menuView != null) menuView.invalidate(); }); break;
                     case "highscores": Dialogs.highscores(this, theme); break;
