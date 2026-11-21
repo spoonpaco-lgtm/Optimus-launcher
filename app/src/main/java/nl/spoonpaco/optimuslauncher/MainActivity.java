@@ -96,7 +96,7 @@ public class MainActivity extends Activity {
                     if (k == 0) mp.previous(); else if (k == 1) mp.toggle(); else mp.next();
                 } else BtMedia.control(k);
                 CarLogger.note("muziek: bandknop " + (k == 0 ? "vorige" : k == 1 ? "speel/pauze" : "volgende"));
-                cockpit.postDelayed(MainActivity.this::refreshCockpit, 300);
+                cockpit.postDelayed(() -> refreshCockpit(false), 300);
             }
             @Override public void onClockLongPress() { startActivity(new Intent(MainActivity.this, DebugActivity.class)); }
             @Override public void onTankTap() { showFuelDialog(); }
