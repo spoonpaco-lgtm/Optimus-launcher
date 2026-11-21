@@ -54,7 +54,7 @@ public final class MusicPlayer {
     public final List<Track> library = new ArrayList<>();
     public volatile boolean scanning = false;
     public volatile String root = null;           // map van de stick, of null
-    public volatile int indexed = 0;
+    public volatile int indexed = 0, total = 0;
 
     private List<Track> queue = new ArrayList<>();
     private List<Track> order = new ArrayList<>(); // afspeelvolgorde (geschud of niet)
@@ -91,6 +91,7 @@ public final class MusicPlayer {
                 root = r == null ? null : r.getAbsolutePath();
                 List<File> files = new ArrayList<>();
                 if (r != null) walk(r, files, 0);
+                total = files.size();
                 Map<String, JSONObject> idx = loadIndex();
                 List<Track> out = new ArrayList<>();
                 indexed = 0;
@@ -324,6 +325,8 @@ public final class MusicPlayer {
     }
 
     public List<Track> all() { synchronized (library) { return new ArrayList<>(library); } }
+    public int librarySize() { synchronized (library) { return library.size(); } }
+    public int favCount() { return favSet().size(); }
 
     // ---------------------------------------------------------------- afspelen
 
@@ -548,6 +551,7 @@ public final class MusicPlayer {
     // ---------------------------------------------------------------- stuurwielknoppen (MediaSession)
 
     private void updateSession() {
+        if (Looper.myLooper() != Looper.getMainLooper()) { h.post(this::updateSession); return; }   // MediaSession alleen op de hoofdthread
         try {
             if (session == null) {
                 session = new MediaSession(ctx, "OptimusMusic");

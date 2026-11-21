@@ -120,6 +120,14 @@ public class MusicPanel extends View {
             hit(r, () -> { mode = m; path.clear(); searching = false; favView = false; scroll = 0; });
         }
         drawList(c, key);
+        if (mp.scanning && mp.total > 0) {
+            RectF bn = new RectF(18, H - 64, 482, H - 18);
+            pt.uiWindow(c, bn, AMB);
+            pt.uiText(c, String.format(Locale.US, Lang.t("BIBLIOTHEEK BIJWERKEN  %d / %d", "UPDATING LIBRARY  %d / %d"), mp.indexed, mp.total),
+                    bn.left + 16, bn.centerY() + 6, 14, AMB, Paint.Align.LEFT);
+            pt.uiGlass(c, bn);
+            postInvalidateDelayed(500);
+        }
 
         // ---- rechts: hoes + nu speelt (tijdens zoeken: de resultaten) ----
         float X = 536;
@@ -137,7 +145,7 @@ public class MusicPanel extends View {
             c.drawBitmap(art, null, new RectF(ar.left + 10, ar.top + 10, ar.right - 10, ar.bottom - 10), new Paint(Paint.FILTER_BITMAP_FLAG));
         } else {
             Synthwave.draw(c, new RectF(ar.left + 10, ar.top + 10, ar.right - 10, ar.bottom - 10), key, System.currentTimeMillis(), mp.isPlaying());
-            if (mp.isPlaying()) postInvalidateDelayed(66, (int) (ar.left * s), (int) (ar.top * s), (int) (ar.right * s) + 1, (int) (ar.bottom * s) + 1);
+            if (mp.isPlaying()) postInvalidateDelayed(80, (int) (ar.left * s), (int) (ar.top * s), (int) (ar.right * s) + 1, (int) (ar.bottom * s) + 1);
         }
         pt.uiGlass(c, ar);
 
@@ -277,7 +285,7 @@ public class MusicPanel extends View {
         });
     }
 
-    private void drawList(Canvas c, int key) {
+    private List<Object[]> buildRows() {
         List<Object[]> rows = new ArrayList<>(); // {label, sub, runnable, isPlayingRow}
         MusicPlayer.Track cur = mp.current();
         if (searching) { searchRows(rows, cur); }
@@ -339,6 +347,20 @@ public class MusicPanel extends View {
                 }
             }
         }
+        return rows;
+    }
+
+    private String rowsKey = "";
+    private List<Object[]> rowsCache = new ArrayList<>();
+
+    private void drawList(Canvas c, int key) {
+        MusicPlayer.Track curT = mp.current();
+        // lijst alleen opnieuw opbouwen als er iets veranderd is (scheelt veel rekenwerk bij animaties)
+        String k = mode + "|" + path + "|" + searching + "|" + query + "|" + favView + "|" + mp.librarySize() + "|"
+                + (curT == null ? "" : curT.path) + "|" + mp.favCount() + "|" + mp.scanning;
+        List<Object[]> rows;
+        if (k.equals(rowsKey)) rows = rowsCache;
+        else { rows = buildRows(); rowsCache = rows; rowsKey = k; }
         if (searching) {
             drawSearchBox(c, key);
             searchResults = rows;
@@ -456,25 +478,6 @@ public class MusicPanel extends View {
             rows.add(new Object[]{t.label(), Lang.t("NUMMER", "SONG") + (t.artist.isEmpty() ? "" : "  ·  " + t.artist),
                     (Runnable) () -> mp.play(tracks, idx), t == cur});
         }
-    }
-
-    /** Eigen placeholder-hoes: zon boven een raster (zelf getekend). */
-    private void placeholder(Canvas c, RectF r, int key) {
-        c.save();
-        c.clipRect(r);
-        Paint q = new Paint(Paint.ANTI_ALIAS_FLAG);
-        q.setShader(new LinearGradient(0, r.top, 0, r.centerY(), 0xFF14061E, 0xFF5A1430, Shader.TileMode.CLAMP));
-        c.drawRect(r.left, r.top, r.right, r.centerY(), q);
-        q.setShader(null);
-        q.setColor(0xFF0C0614); c.drawRect(r.left, r.centerY(), r.right, r.bottom, q);
-        q.setColor(key); c.drawCircle(r.centerX(), r.centerY(), r.width() * 0.22f, q);
-        q.setColor(0xFF14061E);
-        for (int i = 0; i < 5; i++) c.drawRect(r.left, r.centerY() - r.height() * 0.12f + i * r.height() * 0.025f, r.right, r.centerY() - r.height() * 0.12f + i * r.height() * 0.025f + 3, q);
-        q.setColor(0xFF0C0614); c.drawRect(r.left, r.centerY(), r.right, r.bottom, q);
-        q.setColor(0xFFD23CC8); q.setStrokeWidth(2);
-        for (int i = 0; i <= 8; i++) c.drawLine(r.centerX(), r.centerY(), r.left - r.width() * 0.3f + i * r.width() * 1.6f / 8f, r.bottom, q);
-        for (int i = 1; i < 7; i++) { float yy = r.centerY() + r.height() / 2f * (float) Math.pow(i / 7f, 1.8); c.drawLine(r.left, yy, r.right, yy, q); }
-        c.restore();
     }
 
     private boolean hasPerm() { return getContext().checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED; }

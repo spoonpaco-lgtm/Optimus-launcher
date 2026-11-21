@@ -274,6 +274,17 @@ public class MainActivity extends Activity {
     private Theme theme = Theme.LED;
 
     private int lastNav = -1;
+    private long avgAt;
+
+    /** Gemiddelde km/l over alle ritten (max. 1x per minuut uitrekenen) voor het bereik. */
+    private void updateAvgKmPerL() {
+        long now = System.currentTimeMillis();
+        if (now - avgAt < 60_000L) return;
+        avgAt = now;
+        float km = 0, l = 0;
+        for (TripLog.Trip t : TripLog.all(this)) { km += t.km; l += t.liters; }
+        Store.avgKmPerL = km >= 50f && l > 0.5f ? km / l : -1f;
+    }
 
     /** Rit eindigde bij een opgeslagen locatie zonder werkrit-knop: één keer vragen. */
     private void askWorkTrip() {
@@ -529,6 +540,7 @@ public class MainActivity extends Activity {
         c.tripCost = store.tripCost();
         c.tripMinutes = Math.round(store.tripMovingH() * 60f);
         c.l100 = c.tripKm >= 0.5f ? c.tripL / c.tripKm * 100f : -1f;
+        updateAvgKmPerL();
         c.rangeKm = store.rangeKm();
         c.tankL = store.tankLiters();
         c.volts = CarSignals.volts > 0 && System.currentTimeMillis() - CarSignals.voltsTime < 60_000L ? CarSignals.volts : -1f;

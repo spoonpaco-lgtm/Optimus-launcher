@@ -301,6 +301,7 @@ public class VideoActivity extends Activity {
         private float s = 1f, H = 650f, scroll, downY, lastY; private boolean dragging;
         String folder = null, error = "";
         boolean subMode = false;
+        private String rowsKey = ""; private List<Object[]> rowsCache = new ArrayList<>();
         private File candFor; private List<File> cand = new ArrayList<>();
         final RectF video = new RectF(436, 22, 1218, 462);
         private final RectF list = new RectF(18, 84, 402, 0);
@@ -366,7 +367,11 @@ public class VideoActivity extends Activity {
             pt.uiText(c, "VIDEO", 26, 52, 24, key, Paint.Align.LEFT);
             pt.uiLamp(c, 330, 44, 8, pt.uiGrn(), scannedRoot != null);
             pt.uiText(c, "USB", 344, 49, 13, scannedRoot != null ? pt.uiGrn() : 0xFF6C6C78, Paint.Align.LEFT);
-            List<Object[]> rows = new ArrayList<>();
+            String ck = folder + "|" + subMode + "|" + current + "|" + videos.size() + "|" + scanning + "|" + (subs == null ? "" : subs.file) + "|" + (System.currentTimeMillis() / 5000);
+            List<Object[]> rows;
+            if (ck.equals(rowsKey)) { rows = rowsCache; list.bottom = subMode ? H - 18 - 196 : H - 18; }
+            else {
+            rows = new ArrayList<>();
             list.bottom = subMode ? H - 18 - 196 : H - 18;
             if (subMode) {
                 rows.add(new Object[]{"< " + Lang.t("TERUG", "BACK"), Lang.t("ONDERTITEL KIEZEN", "CHOOSE SUBTITLES"), (Runnable) () -> { subMode = false; scroll = 0; }, false});
@@ -401,6 +406,8 @@ public class VideoActivity extends Activity {
                     String sub = String.format(Locale.US, "%.0f MB", f.length() / 1048576f) + (at > 5000 ? Lang.t("  ·  VERDER OP ", "  ·  RESUME AT ") + MusicPlayer.time(at) : "");
                     rows.add(new Object[]{f.getName().replaceAll("\\.[^.]+$", ""), sub, (Runnable) () -> play(f), f.equals(current)});
                 }
+            }
+            rowsCache = rows; rowsKey = ck;
             }
             float rowH = 76;
             float maxScroll = Math.max(0, rows.size() * rowH - list.height());

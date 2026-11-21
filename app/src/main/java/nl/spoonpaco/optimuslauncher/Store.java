@@ -79,8 +79,13 @@ public class Store {
     public int rangeKm() {
         float t = tankLiters();
         if (t < 0) return -1;
+        // zelfde bron als het verbruik op het scherm: gemiddelde van je gelogde ritten (vanaf 50 km)
+        if (avgKmPerL > 0) return Math.round(t * avgKmPerL);
         return Math.round(t / (COMBINED_L100 * calFactor()) * 100f);
     }
+
+    /** Gemiddeld verbruik over alle gelogde ritten (km/l), of -1 als er nog te weinig is. Gezet door MainActivity. */
+    public static volatile float avgKmPerL = -1f;
 
     /**
      * Tankbeurt invoeren. Bij "vol" wordt de kalibratie bijgesteld

@@ -378,7 +378,7 @@ public class CockpitView extends View {
             if (t > 0 && off < 1.5f && t > cycle - 1) npScrollStart = nowMs - 0; // even stil bij het begin
             text(c, main, r.left + 82 - off, r.top + 26, 17, AMB);
             text(c, main, r.left + 82 - off + cycle, r.top + 26, 17, AMB);
-            postInvalidateDelayed(66, (int) (r.left * s), (int) (r.top * s), (int) (r.right * s), (int) (r.bottom * s));
+            postInvalidateDelayed(100, (int) (r.left * s), (int) (r.top * s), (int) (r.right * s), (int) (r.bottom * s));
         }
         text(c, npSub.toUpperCase(Locale.ROOT), r.left + 82, r.bottom - 8, 9, dark(AMB, 0.65f));
         c.restore();

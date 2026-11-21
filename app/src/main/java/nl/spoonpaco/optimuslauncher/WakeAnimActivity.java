@@ -39,6 +39,8 @@ public class WakeAnimActivity extends Activity {
         root.addView(v, lp);
         root.setOnClickListener(x -> next());
         setContentView(root);
+        // korte geluidsfocus: muziek wordt even zachter en gaat daarna gewoon door (niet stoppen)
+        try { v.setAudioFocusRequest(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK); } catch (Throwable ignored) { }
         v.setVideoURI(Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.optimus_boot));
         v.setOnCompletionListener(mp -> next());
         v.setOnErrorListener((mp, what, extra) -> { PowerLog.log("opstartfilmpje fout " + what); next(); return true; });

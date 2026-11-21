@@ -70,6 +70,7 @@ public final class CarSignals {
                     volts = v;
                     voltsTime = System.currentTimeMillis();
                     BatteryHealth.onVolts(v);
+                    AdcProbe.onVolts(v);
                     return big;
                 }
                 return false;
@@ -89,7 +90,7 @@ public final class CarSignals {
             default: old = lights; lights = v; break;
         }
         if (old == v) return false;
-        if (name.equals("contact")) BatteryHealth.onContact(v);
+        if (name.equals("contact")) { BatteryHealth.onContact(v); if (v == 1) AdcProbe.onContactOn(); }
         Listener l = listener;
         if (l != null) l.onSignal(name, v);
         return true;
