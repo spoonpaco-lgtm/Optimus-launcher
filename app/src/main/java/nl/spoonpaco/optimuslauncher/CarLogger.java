@@ -49,7 +49,7 @@ public class CarLogger {
     private static long outBytes = 0;
     private static long lastFlush = 0;
     private static Process proc;
-    private static Thread reader;
+    private static volatile Thread reader;
 
     private static final SimpleDateFormat DAY = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
     private static final SimpleDateFormat TS = new SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US);
@@ -205,8 +205,11 @@ public class CarLogger {
         };
         int variant = 0;
         int quickFails = 0;
+        final Thread me = Thread.currentThread();
         while (true) {
-            synchronized (LOCK) { if (reader == null) return; }
+            // alleen de huidige lezer gaat door: na een herstart (wakker worden) stopt de oude,
+            // anders draaien er meerdere logcat-processen naast elkaar (gezien: 3) en komt alles dubbel in het log
+            synchronized (LOCK) { if (reader != me) return; }
             long started = System.currentTimeMillis();
             try {
                 Process p = Runtime.getRuntime().exec(commands[variant]);
@@ -214,6 +217,7 @@ public class CarLogger {
                 BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()), 16384);
                 String line;
                 while ((line = br.readLine()) != null) {
+                    if (reader != me) { p.destroy(); return; }
                     boolean changed = CarSignals.parse(line);
                     if (meetritUntil > 0) checkMeetrit();
                     if (isNoise(line) || (!logAll && (!isCarLine(line) || !changed))) { linesNoise++; continue; }
