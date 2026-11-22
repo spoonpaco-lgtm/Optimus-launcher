@@ -51,7 +51,10 @@ public final class Remote {
     static WeakReference<View> remoteDecor;
 
     /** Staat er een scherm van de launcher-app vooraan (launcher, rittenlog, debug, ...)? */
-    public static boolean ownScreenVisible() { return resumed > 0; }
+    /** Eigen scherm zichtbaar, of net gesloten (bij wisselen tussen eigen schermen is er even géén scherm actief:
+     *  zonder deze marge flitst de zwevende muziekkaart dan op en vangt hij een tik). */
+    public static boolean ownScreenVisible() { return resumed > 0 || android.os.SystemClock.uptimeMillis() - lastOwnPause < 1500; }
+    private static volatile long lastOwnPause = 0;
     private static final Handler H = new Handler(Looper.getMainLooper());
 
     private Remote() { }
@@ -66,7 +69,7 @@ public final class Remote {
             }
             @Override public void onActivityCreated(Activity a, Bundle b) { }
             @Override public void onActivityStarted(Activity a) { }
-            @Override public void onActivityPaused(Activity a) { if (!(a instanceof RemoteActivity)) resumed = Math.max(0, resumed - 1); }
+            @Override public void onActivityPaused(Activity a) { if (!(a instanceof RemoteActivity)) { resumed = Math.max(0, resumed - 1); lastOwnPause = android.os.SystemClock.uptimeMillis(); } }
             @Override public void onActivityStopped(Activity a) { }
             @Override public void onActivitySaveInstanceState(Activity a, Bundle b) { }
             @Override public void onActivityDestroyed(Activity a) { }
