@@ -655,27 +655,44 @@ public final class MusicPlayer {
     private boolean pendingResume = false, contactPausing = false;
     private int pendingSeek = 0, resumeTries = 0;
     private final Runnable saver = new Runnable() {
-        @Override public void run() { if (isPlaying()) { saveState(); h.postDelayed(this, 5000); } }
+        @Override public void run() { if (isPlaying()) { saveState(); h.postDelayed(this, 15000); } }
     };
 
     public boolean resumeEnabled() { return ctx.getSharedPreferences("music", Context.MODE_PRIVATE).getBoolean("resume", true); }
     public void setResumeEnabled(boolean on) { ctx.getSharedPreferences("music", Context.MODE_PRIVATE).edit().putBoolean("resume", on).apply(); }
 
     private File stateFile() { return new File(ctx.getFilesDir(), "music-state.json"); }
+    private File orderFile() { return new File(ctx.getFilesDir(), "music-order.json"); }
+    private List<Track> savedOrder; private int savedOrderSize = -1;
+
+    private static String readAll(File file) throws java.io.IOException {
+        try (FileInputStream f = new FileInputStream(file)) {
+            byte[] b = new byte[(int) file.length()];
+            int n = 0; while (n < b.length) { int r = f.read(b, n, b.length - n); if (r < 0) break; n += r; }
+            return new String(b, 0, n, "UTF-8");
+        }
+    }
 
     /** Huidige wachtrij, nummer en positie bewaren (ook of hij speelde). */
     private void saveState() { saveState(isPlaying() || (wantPlay && !prepared)); }
     private void saveState(boolean playing) {
         if (order.isEmpty() || pos < 0) return;
         try {
+            // de afspeellijst (kan de hele bibliotheek zijn) alleen wegschrijven als hij veranderd is
+            List<Track> ord = order;
+            if (ord != savedOrder || ord.size() != savedOrderSize || !orderFile().exists()) {
+                JSONArray a = new JSONArray();
+                for (Track t : ord) a.put(t.path);
+                try (FileOutputStream f = new FileOutputStream(orderFile())) { f.write(a.toString().getBytes("UTF-8")); }
+                savedOrder = ord; savedOrderSize = ord.size();
+            }
             JSONObject o = new JSONObject();
-            JSONArray a = new JSONArray();
-            for (Track t : order) a.put(t.path);
-            o.put("order", a); o.put("pos", pos); o.put("ms", positionMs()); o.put("playing", playing);
+            o.put("pos", pos); o.put("ms", positionMs()); o.put("playing", playing);
+            o.put("cur", pos >= 0 && pos < ord.size() ? ord.get(pos).path : "");
             try (FileOutputStream f = new FileOutputStream(stateFile())) { f.write(o.toString().getBytes("UTF-8")); }
         } catch (Exception ignored) { }
         h.removeCallbacks(saver);
-        if (isPlaying()) h.postDelayed(saver, 5000);
+        if (isPlaying()) h.postDelayed(saver, 15000);
     }
 
     /** Contact uit: pauzeren en onthouden dat hij speelde. Contact aan: doorspelen (als de optie aanstaat). */
@@ -721,8 +738,8 @@ public final class MusicPlayer {
         }
         Map<String, Track> byPath = new HashMap<>();
         for (Track t : all()) byPath.put(t.path, t);
-        JSONArray a = o.optJSONArray("order");
-        if (a == null) return;
+        JSONArray a = o.optJSONArray("order");   // oud formaat (alles in één bestand)
+        if (a == null) { try { a = new JSONArray(readAll(orderFile())); } catch (Exception e) { return; } }
         List<Track> list = new ArrayList<>();
         int savedPos = o.optInt("pos", 0), newPos = 0;
         for (int i = 0; i < a.length(); i++) {

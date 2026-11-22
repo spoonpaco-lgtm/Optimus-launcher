@@ -190,6 +190,7 @@ public class TrackerService extends Service implements LocationListener {
         try { unregisterReceiver(powerRx); } catch (Exception ignored) { }
         try { unregisterReceiver(usbRx); } catch (Exception ignored) { }
         CarSignals.listener = null;
+        store.flush();
         PowerLog.log("dienst gestopt");
         removeBubble();
         CarLogger.stop();
@@ -362,6 +363,7 @@ public class TrackerService extends Service implements LocationListener {
             }
         }
         // Contact aan na minstens 1 min uit -> opstartfilmpje (tablet slaapt niet altijd echt, dus niet alleen op scherm/slaap vertrouwen)
+        if (name.equals("contact") && v == 0) store.flush();   // ritwaarden meteen opslaan: FlyAudio schiet de app soms af
         if (name.equals("contact") && (v == 0 || v == 1)) MusicPlayer.get(this).onContact(v == 1);
         if (name.equals("contact")) {
             long now = android.os.SystemClock.elapsedRealtime();
@@ -459,6 +461,7 @@ public class TrackerService extends Service implements LocationListener {
     };
 
     private void finishTrip(String why) {
+        store.flush();
         store.endTrip();
         try { TripLog.end(this, store, last); } catch (Exception e) { CarLogger.note("rittenlog fout: " + e.getMessage()); }
         CarLogger.note("rit afgesloten (" + why + "): " + store.summaryShort());
@@ -604,9 +607,19 @@ public class TrackerService extends Service implements LocationListener {
                     {"EURO", cost >= 0 ? String.format(us, "%.2f", cost) : "--"}};
             bubble.setSizeDp(250, 270);
         }
-        bubble.invalidate();
-        try { wm.updateViewLayout(bubble, bp); } catch (Exception ignored) { }
+        // alleen opnieuw tekenen/plaatsen als er echt iets veranderd is (scheelt werk naast Android Auto)
+        StringBuilder sig = new StringBuilder(bubble.big).append('|').append(bubble.side).append('|').append(bubbleTheme);
+        if (bubble.rows != null) for (String[] r : bubble.rows) sig.append('|').append(r[1]);
+        String sg = sig.toString();
+        boolean collapsed = store.overlayCollapsed();
+        if (!sg.equals(bubbleSig)) { bubbleSig = sg; bubble.invalidate(); }
+        if (collapsed != bubbleCollapsed) {
+            bubbleCollapsed = collapsed;
+            try { wm.updateViewLayout(bubble, bp); } catch (Exception ignored) { }
+        }
     }
+    private String bubbleSig = "";
+    private Boolean bubbleCollapsed = null;
 
     private void addBubble() {
         wm = (android.view.WindowManager) getSystemService(Context.WINDOW_SERVICE);
@@ -660,6 +673,7 @@ public class TrackerService extends Service implements LocationListener {
                 return false;
             }
         });
+        bubbleSig = ""; bubbleCollapsed = null;
         try { wm.addView(bubble, bp); } catch (Exception e) { bubble = null; }
     }
 

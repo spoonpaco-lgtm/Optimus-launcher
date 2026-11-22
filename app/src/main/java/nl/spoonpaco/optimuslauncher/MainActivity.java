@@ -446,7 +446,7 @@ public class MainActivity extends Activity {
         if (scanner != null) scanner.update(CarSignals.mcu04 == 1 || mpl.isPlaying(), Math.max(BatteryHealth.level, store.serviceDue(Clock.now()) ? 1 : 0));
         c.lLog = navActive();
         askWorkTrip();
-        c.invalidate();
+        c.invalidateChanged();   // alleen vakken die veranderd zijn
     }
 
     /** 0 = geen netwerk, 1 = verbonden zonder internet, 2 = internet ok. */

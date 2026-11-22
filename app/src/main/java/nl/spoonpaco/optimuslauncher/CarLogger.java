@@ -69,6 +69,9 @@ public class CarLogger {
             "aictlog-ShellUtils",
             "FansHelper.sendCpuTemp",
             "[Gralloc]",
+            // herhaling zonder informatie (samen ~95% van een logbestand):
+            ":AudioAttributes: usage=",              // FlyAudio McuService bij elk stukje geluid
+            "tag=\"LocationManagerService\"",        // wakelock-regels bij elke GPS-positie
     };
 
     /** Alleen-auto-modus (standaard): bewaar alleen regels met autodata. */
@@ -196,8 +199,9 @@ public class CarLogger {
 
     private static void readLoop() {
         String[][] commands = {
-                {"logcat", "-v", "threadtime", "-T", "1", "-b", "main", "-b", "system", "-b", "events", "-b", "kernel"},
-                {"logcat", "-v", "threadtime", "-T", "1", "-b", "main", "-b", "system", "-b", "events"},
+                // gps_zkw:S = de GPS-ruwdata (tientallen regels per seconde) al bij de bron uitzetten
+                {"logcat", "-v", "threadtime", "-T", "1", "-b", "main", "-b", "system", "-b", "events", "-b", "kernel", "gps_zkw:S"},
+                {"logcat", "-v", "threadtime", "-T", "1", "-b", "main", "-b", "system", "-b", "events", "gps_zkw:S"},
         };
         int variant = 0;
         int quickFails = 0;

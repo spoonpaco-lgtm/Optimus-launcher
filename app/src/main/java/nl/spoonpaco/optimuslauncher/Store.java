@@ -17,6 +17,48 @@ public class Store {
 
     private final SharedPreferences p;
 
+
+    // ---- schrijven met vertraging ----
+    // Tijdens het rijden veranderen km/brandstof/tank bij elke GPS-positie. Elke keer het hele
+    // instellingenbestand wegschrijven kost veel; daarom staan die waarden eerst hier en gaan ze
+    // elke 20 s (en bij contact uit / einde rit / afsluiten) naar de opslag.
+    private static final java.util.HashMap<String, Object> LIVE = new java.util.HashMap<>();
+    private static long lastFlush = 0L;
+    private static final long FLUSH_MS = 20_000L;
+
+    private float getF(String k, float def) {
+        synchronized (LIVE) { Object v = LIVE.get(k); if (v instanceof Float) return (Float) v; }
+        return p.getFloat(k, def);
+    }
+    private long getL(String k, long def) {
+        synchronized (LIVE) { Object v = LIVE.get(k); if (v instanceof Long) return (Long) v; }
+        return p.getLong(k, def);
+    }
+    private static void putHot(String k, float v) { LIVE.put(k, v); }
+
+    private void maybeFlush() {
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (now - lastFlush >= FLUSH_MS) flush();
+    }
+
+    /** Wachtende ritwaarden nu opslaan. */
+    public void flush() {
+        synchronized (LIVE) {
+            lastFlush = android.os.SystemClock.elapsedRealtime();
+            if (LIVE.isEmpty()) return;
+            SharedPreferences.Editor e = p.edit();
+            for (java.util.Map.Entry<String, Object> en : LIVE.entrySet()) {
+                if (en.getValue() instanceof Float) e.putFloat(en.getKey(), (Float) en.getValue());
+                else if (en.getValue() instanceof Long) e.putLong(en.getKey(), (Long) en.getValue());
+            }
+            e.apply();   // apply zet het eerst in het geheugen van de prefs, dus LIVE mag direct leeg
+            LIVE.clear();
+        }
+    }
+
+    /** Editor voor gewone wijzigingen: eerst de wachtende ritwaarden opslaan, zodat niets elkaar overschrijft. */
+    private SharedPreferences.Editor ed() { flush(); return p.edit(); }
+
     public Store(Context c) {
         p = c.getSharedPreferences("optimus", Context.MODE_PRIVATE);
     }
@@ -42,12 +84,13 @@ public class Store {
     public void addFuel(float liters) {
         if (liters <= 0f) return;
         liters *= calFactor();
-        SharedPreferences.Editor e = p.edit();
-        e.putFloat("tripL", tripLiters() + liters);
-        e.putFloat("estSinceFull", p.getFloat("estSinceFull", 0f) + liters);
-        float t = tankLiters();
-        if (t >= 0) e.putFloat("tank", Math.max(0f, t - liters));
-        e.apply();
+        synchronized (LIVE) {
+            putHot("tripL", tripLiters() + liters);
+            putHot("estSinceFull", getF("estSinceFull", 0f) + liters);
+            float t = tankLiters();
+            if (t >= 0) putHot("tank", Math.max(0f, t - liters));
+        }
+        maybeFlush();
     }
 
     /**
@@ -69,9 +112,9 @@ public class Store {
 
     // ---- tank ----
 
-    public float tankLiters() { return p.getFloat("tank", -1f); }
-    public float kmSinceFull() { return p.getFloat("kmSinceFull", 0f); }
-    public float estSinceFull() { return p.getFloat("estSinceFull", 0f); }
+    public float tankLiters() { return getF("tank", -1f); }
+    public float kmSinceFull() { return getF("kmSinceFull", 0f); }
+    public float estSinceFull() { return getF("estSinceFull", 0f); }
     public float addedSinceFull() { return p.getFloat("addedSinceFull", 0f); }
     public float price() { return p.getFloat("price", -1f); }
 
@@ -99,15 +142,15 @@ public class Store {
      */
     public void fill(float liters, float pricePerLiter, boolean full, int odo) {
         if (odo > 0) setOdometer(odo);   // tellerstand is de echte stand: GPS-schatting gelijkzetten
-        SharedPreferences.Editor e = p.edit();
+        SharedPreferences.Editor e = ed();
         if (pricePerLiter > 0) e.putFloat("price", pricePerLiter);
 
         float addedSinceFull = p.getFloat("addedSinceFull", 0f) + Math.max(0f, liters);
 
         if (full) {
             boolean hadFull = p.getBoolean("hadFull", false);
-            float km = p.getFloat("kmSinceFull", 0f);
-            float est = p.getFloat("estSinceFull", 0f);
+            float km = getF("kmSinceFull", 0f);
+            float est = getF("estSinceFull", 0f);
             int odoPrev = p.getInt("odoAtFull", -1);
             float realKm = odo > 0 && odoPrev > 0 ? odo - odoPrev : -1f;
             boolean useReal = realKm >= 100f && realKm <= 3000f && km >= 50f;
@@ -147,11 +190,11 @@ public class Store {
 
     // ---- rit ----
 
-    public float tripKm() { return p.getFloat("tripKm", 0f); }
-    public float tripMovingH() { return p.getFloat("tripH", 0f); }
-    public float tripMaxKmh() { return p.getFloat("tripMax", 0f); }
-    public float tripLiters() { return p.getFloat("tripL", 0f); }
-    public long lastMoveTime() { return p.getLong("lastMove", 0L); }
+    public float tripKm() { return getF("tripKm", 0f); }
+    public float tripMovingH() { return getF("tripH", 0f); }
+    public float tripMaxKmh() { return getF("tripMax", 0f); }
+    public float tripLiters() { return getF("tripL", 0f); }
+    public long lastMoveTime() { return getL("lastMove", 0L); }
 
     public float tripAvgKmh() {
         float h = tripMovingH();
@@ -168,12 +211,12 @@ public class Store {
 
     public boolean tripEnded() { return p.getBoolean("tripEnded", true); }
     public boolean summaryPending() { return p.getBoolean("sumPending", false); }
-    public void clearSummary() { p.edit().putBoolean("sumPending", false).apply(); }
+    public void clearSummary() { ed().putBoolean("sumPending", false).apply(); }
 
     /** Rit afsluiten: samenvatting vastleggen (rit-cijfers blijven zichtbaar tot de volgende rit). */
     public void endTrip() {
         float pr = price();
-        p.edit()
+        ed()
             .putBoolean("tripEnded", true)
             .putBoolean("sumPending", true)
             .putFloat("sumKm", tripKm())
@@ -189,7 +232,7 @@ public class Store {
 
     // ---- rijstijlscore ----
 
-    public void addHarsh() { p.edit().putInt("tripHarsh", p.getInt("tripHarsh", 0) + 1).apply(); }
+    public void addHarsh() { ed().putInt("tripHarsh", p.getInt("tripHarsh", 0) + 1).apply(); }
     public int tripHarsh() { return p.getInt("tripHarsh", 0); }
 
     /**
@@ -208,7 +251,7 @@ public class Store {
 
     public int summaryScore() { return p.getInt("sumScore", -1); }
     public String newRecord() { return p.getString("newRecord", ""); }
-    public void setNewRecord(String r) { p.edit().putString("newRecord", r).apply(); }
+    public void setNewRecord(String r) { ed().putString("newRecord", r).apply(); }
 
     public String summaryText() {
         java.util.Locale nl = new java.util.Locale("nl");
@@ -252,7 +295,7 @@ public class Store {
     }
 
     public void startNewTrip() {
-        p.edit()
+        ed()
             .putFloat("lastTripKm", tripKm())
             .putFloat("lastTripAvg", tripAvgKmh())
             .putFloat("lastTripMax", tripMaxKmh())
@@ -266,32 +309,34 @@ public class Store {
     /** Eén stukje gereden afstand verwerken. */
     public void addSegment(float km, float hours, float kmh, long now) {
         float liters = litersPer100At(kmh) / 100f * km;
-        SharedPreferences.Editor e = p.edit();
-        e.putFloat("tripKm", tripKm() + km);
-        e.putFloat("tripH", tripMovingH() + hours);
-        e.putFloat("tripMax", Math.max(tripMaxKmh(), kmh));
-        e.putFloat("tripL", tripLiters() + liters);
-        e.putFloat("kmSinceFull", p.getFloat("kmSinceFull", 0f) + km);
-        e.putFloat("totalKm", p.getFloat("totalKm", 0f) + km);
-        e.putFloat("estSinceFull", p.getFloat("estSinceFull", 0f) + liters);
-        float t = tankLiters();
-        if (t >= 0) e.putFloat("tank", Math.max(0f, t - liters));
-        e.putLong("lastMove", now);
-        e.apply();
+        synchronized (LIVE) {
+            putHot("tripKm", tripKm() + km);
+            putHot("tripH", tripMovingH() + hours);
+            putHot("tripMax", Math.max(tripMaxKmh(), kmh));
+            putHot("tripL", tripLiters() + liters);
+            putHot("kmSinceFull", getF("kmSinceFull", 0f) + km);
+            putHot("totalKm", getF("totalKm", 0f) + km);
+            putHot("estSinceFull", getF("estSinceFull", 0f) + liters);
+            float t = tankLiters();
+            if (t >= 0) putHot("tank", Math.max(0f, t - liters));
+            LIVE.put("lastMove", now);
+        }
+        maybeFlush();
     }
 
     // ---- zwevend venster ----
 
     public boolean overlayEnabled() { return p.getBoolean("overlay", true); }
-    public void setOverlayEnabled(boolean on) { p.edit().putBoolean("overlay", on).apply(); }
+    public void setOverlayEnabled(boolean on) { ed().putBoolean("overlay", on).apply(); }
     public boolean overlayCollapsed() { return p.getBoolean("ovCollapsed", false); }
-    public void setOverlayCollapsed(boolean c) { p.edit().putBoolean("ovCollapsed", c).apply(); }
+    public void setOverlayCollapsed(boolean c) { ed().putBoolean("ovCollapsed", c).apply(); }
     public int overlayX() { return p.getInt("ovX", 24); }
     public int overlayY() { return p.getInt("ovY", 90); }
-    public void setOverlayPos(int x, int y) { p.edit().putInt("ovX", x).putInt("ovY", y).apply(); }
+    public void setOverlayPos(int x, int y) { ed().putInt("ovX", x).putInt("ovY", y).apply(); }
 
     public void touchMove(long now) {
-        p.edit().putLong("lastMove", now).apply();
+        synchronized (LIVE) { LIVE.put("lastMove", now); }
+        maybeFlush();
     }
 
     /** Cijfers van de laatst afgesloten rit: km, uren, gem, max, liter, kosten (-1 = onbekend). */
@@ -306,7 +351,7 @@ public class Store {
     public static final int OIL_MONTHS = 12;     // of elk jaar
 
     /** Door GPS gereden km sinds installatie. */
-    public float totalKm() { return p.getFloat("totalKm", 0f); }
+    public float totalKm() { return getF("totalKm", 0f); }
 
     /** Kilometerstand (ingevoerd + sindsdien gereden), of -1 als nooit ingevoerd. */
     public int odometer() {
@@ -316,14 +361,14 @@ public class Store {
     }
 
     public void setOdometer(int km) {
-        p.edit().putFloat("odoBase", km).putFloat("odoAt", totalKm()).apply();
+        ed().putFloat("odoBase", km).putFloat("odoAt", totalKm()).apply();
     }
 
     public int oilKm() { return p.getInt("oilKm", -1); }
     public long oilDate() { return p.getLong("oilDate", 0L); }
     public long apkDate() { return p.getLong("apkDate", 0L); }
-    public void setOil(int km, long date) { p.edit().putInt("oilKm", km).putLong("oilDate", date).apply(); }
-    public void setApk(long date) { p.edit().putLong("apkDate", date).apply(); }
+    public void setOil(int km, long date) { ed().putInt("oilKm", km).putLong("oilDate", date).apply(); }
+    public void setApk(long date) { ed().putLong("apkDate", date).apply(); }
 
     /** Km tot de volgende olieverversing, of Integer.MIN_VALUE als onbekend. */
     public int oilKmLeft() {
@@ -357,5 +402,5 @@ public class Store {
     // ---- rittenlog aan/uit ----
 
     public boolean tripLogOn() { return p.getBoolean("tripLog", true); }
-    public void setTripLogOn(boolean on) { p.edit().putBoolean("tripLog", on).apply(); }
+    public void setTripLogOn(boolean on) { ed().putBoolean("tripLog", on).apply(); }
 }

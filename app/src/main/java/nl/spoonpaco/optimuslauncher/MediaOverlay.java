@@ -49,13 +49,24 @@ final class MediaOverlay {
             String th = ctx.getSharedPreferences("optimus", Context.MODE_PRIVATE).getString("theme", "led");
             card.theme(Theme.byId(th));
             if (cardText != null) cardText.setTheme(Theme.byId(th));
-            card.invalidate();
+            // alleen tekenen als er iets veranderd is; per seconde alleen tijd + voortgang (niet de knoppen)
+            MusicPlayer.Track t = mp.current();
+            String sig = (t == null ? "" : t.path) + "|" + mp.isPlaying() + "|" + th + "|" + mp.durationMs();
+            int sec = mp.positionMs() / 1000;
+            if (!sig.equals(cardSig)) { cardSig = sig; cardSec = sec; card.invalidate(); }
+            else if (sec != cardSec) {
+                cardSec = sec;
+                float u = RetroUi.unit(ctx);
+                card.invalidate(0, Math.round(10 * u), card.getWidth(), Math.round(266 * u));
+            }
         }
     }
+    private String cardSig = ""; private int cardSec = -1;
 
     private SharedPreferences prefs() { return ctx.getSharedPreferences("optimus", Context.MODE_PRIVATE); }
 
     private void add() {
+        cardSig = ""; cardSec = -1;
         if (wm == null) wm = (WindowManager) ctx.getSystemService(Context.WINDOW_SERVICE);
         card = new Card(ctx);
         float u = RetroUi.unit(ctx);

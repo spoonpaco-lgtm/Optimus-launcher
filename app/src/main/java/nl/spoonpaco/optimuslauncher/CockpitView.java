@@ -129,9 +129,34 @@ public class CockpitView extends View {
 
     // ---------------------------------------------------------------- tekenen
 
+    /**
+     * Na het zetten van nieuwe waarden (1x per seconde): alleen de vakken opnieuw tekenen waarvan iets
+     * veranderd is. Stilstaand zonder muziek is dat bijna niets; met gloed in software scheelt dat veel.
+     */
+    private final String[] sig = new String[4];
+    public void invalidateChanged() {
+        if (getWidth() == 0 || bg == null) { invalidate(); return; }
+        long nowMs = System.currentTimeMillis();
+        String[] nw = {
+                (now / 60000L) + "|" + npShow + "|" + npPlaying + "|" + (nowMs < npPinUntil) + "|" + npTitle + "|" + npArtist + "|" + npSub
+                        + "|" + npSrc + "|" + npTime + "|" + npTotal + "|" + Math.round(npFrac * 400) + "|" + Math.round(heading),
+                speed + "|" + sats + "|" + tripAvg + "|" + tripMax,
+                tripKm + "|" + tripL + "|" + tripCost + "|" + tripMinutes + "|" + volts + "|" + accuWarn + (accuWarn > 0 ? "|" + nowMs / 1000 : "")
+                        + "|" + lContact + lMotor + lLicht + lTrips + lAuto + lLog,
+                l100 + "|" + rangeKm + "|" + tankL + "|" + hintColor};
+        RectF[] area = {new RectF(0, 0, 1240, 84), pan1, pan2, pan3};
+        for (int i = 0; i < 4; i++) {
+            if (nw[i].equals(sig[i])) continue;
+            sig[i] = nw[i];
+            RectF r = area[i];
+            invalidate(Math.max(0, Math.round((r.left - 26) * s)), Math.max(0, Math.round((r.top - 26) * s)),
+                    Math.min(getWidth(), Math.round((r.right + 26) * s)), Math.min(getHeight(), Math.round((r.bottom + 26) * s)));
+        }
+    }
+
     @Override
     protected void onDraw(Canvas c) {
-        if (bg == null) buildBackground();
+        if (bg == null) { buildBackground(); java.util.Arrays.fill(sig, null); }
         c.drawBitmap(bg, 0, 0, null);
         c.save();
         c.scale(s, s);

@@ -69,7 +69,8 @@ public class ScannerView extends View {
             }
             float max = 0; for (float v : lvl) max = Math.max(max, v);
             invalidate((int) strip.left, (int) strip.top - 20, (int) strip.right, (int) strip.bottom + 20);
-            if (animate || warn > 0 || max > 0.02f) postDelayed(this, 40);
+            if (animate || max > 0.02f) postDelayed(this, 40);
+            else if (warn > 0) postDelayed(this, 100);          // alleen zacht pulseren: 10x per seconde is genoeg
             else if (playing) postDelayed(this, 500);       // rustpauze: zuinig wachten op de volgende sweep
             else running = false;
         }
