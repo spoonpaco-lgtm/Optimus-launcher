@@ -25,8 +25,32 @@ public final class CarSignals {
 
     private CarSignals() { }
 
+    // De FlyAudio-MCU stuurt de spanning alleen bij een flinke verandering (niet elke 10 s), en de
+    // eerste melding na wakker worden kan een oude waarde van vóór de slaap zijn (21 nov: 14,091 V na
+    // 43 min slaap, tot op de millivolt gelijk aan de laatste waarde). Daarom:
+    //  - een start herkennen we aan het contact dat even wegvalt (< 10 s) of een dip onder 11 V;
+    //  - zonder start telt de eerste melding na contact aan niet mee.
+    private static volatile int voltsSinceOn = 0;
+    private static volatile boolean crankSeen = false;
+    private static volatile long contactOffAt = 0L;
+
+    /** Is de huidige spanning te vertrouwen (geen mogelijk oude waarde van vóór de slaap)? */
+    public static boolean voltsTrusted() {
+        return volts > 0 && (crankSeen || voltsSinceOn >= 2);
+    }
+
     public static boolean engineRunning() {
-        return volts >= 13.3f && System.currentTimeMillis() - voltsTime < 30_000L;
+        if (contact == 0) return false;
+        if (volts >= 13.3f && voltsTrusted()) return true;
+        // rijden we (GPS)? dan draait de motor, ook als de MCU nog geen nieuwe spanning stuurde
+        return TrackerService.speedKmh > 10f && System.currentTimeMillis() - TrackerService.lastFixTime < 5_000L;
+    }
+
+    /** Spanning voor op het scherm: een mogelijk oude hoge waarde (motor draait niet bewezen) niet tonen. */
+    public static float displayVolts() {
+        if (volts <= 0) return -1f;
+        if (volts >= 13.0f && !voltsTrusted() && !engineRunning()) return -1f;
+        return volts;
     }
 
     /** true = regel is "interessant" (status veranderd) en mag in de log. */
@@ -67,6 +91,8 @@ public final class CarSignals {
                 if (f.length() == 16 && f.startsWith("ff55050002")) {
                     float v = Integer.parseInt(f.substring(10, 14), 16) / 1000f;
                     boolean big = volts < 0 || Math.abs(v - volts) >= 0.5f;
+                    voltsSinceOn++;
+                    if (v > 5f && v < 11.0f) crankSeen = true;   // startmotor trekt de spanning omlaag
                     volts = v;
                     voltsTime = System.currentTimeMillis();
                     BatteryHealth.onVolts(v);
@@ -90,7 +116,16 @@ public final class CarSignals {
             default: old = lights; lights = v; break;
         }
         if (old == v) return false;
-        if (name.equals("contact")) { BatteryHealth.onContact(v); if (v == 1) AdcProbe.onContactOn(); }
+        if (name.equals("contact")) {
+            long now = System.currentTimeMillis();
+            if (v == 0) contactOffAt = now;
+            else if (v == 1) {
+                if (contactOffAt > 0 && now - contactOffAt < 10_000L) crankSeen = true;   // contact viel even weg = starten
+                else { voltsSinceOn = 0; crankSeen = false; }                              // nieuw contact (na slaap)
+            }
+            BatteryHealth.onContact(v);
+            if (v == 1) AdcProbe.onContactOn();
+        }
         Listener l = listener;
         if (l != null) l.onSignal(name, v);
         return true;

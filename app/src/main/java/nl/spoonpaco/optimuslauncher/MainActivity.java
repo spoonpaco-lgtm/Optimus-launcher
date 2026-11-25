@@ -424,7 +424,8 @@ public class MainActivity extends Activity {
         updateAvgKmPerL();
         c.rangeKm = store.rangeKm();
         c.tankL = store.tankLiters();
-        c.volts = CarSignals.volts > 0 && System.currentTimeMillis() - CarSignals.voltsTime < 60_000L ? CarSignals.volts : -1f;
+        // de MCU stuurt alleen bij verandering: de laatste waarde blijft geldig zolang het contact aan is
+        c.volts = CarSignals.contact != 0 ? CarSignals.displayVolts() : -1f;
         c.lContact = CarSignals.contact == 1 || (CarSignals.contact < 0 && c.volts > 0);
         c.lMotor = CarSignals.engineRunning();
         c.lLicht = CarSignals.lights == 1;

@@ -58,6 +58,12 @@ public final class BatteryHealth {
         if (sp == null || v <= 5f) return;
         long now = System.currentTimeMillis();
         if (window) {
+            // eerste melding na wakker worden kan een oude waarde van vóór de slaap zijn: een hoge
+            // waarde zonder bewezen start (contact-wegval of dip) negeren, niet als rust of "motor aan" tellen
+            if (v >= 13.0f && !CarSignals.voltsTrusted()) {
+                CarLogger.note(String.format(Locale.US, "accu: %.2f V genegeerd (eerste melding na contact aan, mogelijk oude waarde)", v));
+                return;
+            }
             if (restPending) { rest = v; restPending = false; }
             crankMin = Math.min(crankMin, v);
             if (v >= 13.3f) {

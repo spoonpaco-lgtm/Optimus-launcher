@@ -263,6 +263,7 @@ public class TrackerService extends Service implements LocationListener {
 
     /** Bij (her)start van de dienst: kwamen we net uit slaap of na contact uit? Dan opstartfilmpje. */
     private void detectWakeAfterKill() {
+        armGpsWatch();   // dienst (her)start: ook dan GPS bewaken tot de eerste positie
         long el = android.os.SystemClock.elapsedRealtime();
         long slept = el - android.os.SystemClock.uptimeMillis();
         android.content.SharedPreferences sp = powerPrefs();
@@ -421,7 +422,20 @@ public class TrackerService extends Service implements LocationListener {
         if (offMs < 0 || offMs > 2L * 60L * 1000L) playWakeAnim("wakker na " + PowerLog.dur(Math.max(0, offMs)));
     }
 
+    /**
+     * GPS-bewaking aanzetten: blijft er een positie uit, dan logt tripTick dat na 2 min en vraagt hij
+     * de GPS na 4 min (en daarna elke 2 min) opnieuw aan. Moet ook na een herstart van de dienst
+     * (FlyAudio schiet de app af tijdens lange slaap), anders staat de bewaking uit — zo ging het op 22 nov.
+     */
+    private void armGpsWatch() {
+        if (System.currentTimeMillis() - lastFixTime < 10_000L) return;   // er zijn al posities
+        wakeAt = android.os.SystemClock.elapsedRealtime();
+        fixSinceWake = false;
+        lastNoFixNote = 0L;
+    }
+
     private void restartGps(String why) {
+        if (!"geen fix".equals(why)) armGpsWatch();
         if (lm == null || !gpsPresent) return;
         try {
             lm.removeUpdates(this);
@@ -488,7 +502,9 @@ public class TrackerService extends Service implements LocationListener {
 
         // ---- stilstand-filter tegen GPS-gedrift ----
         // 1) motor uit (accu < 13,0 V) of contact uit = de auto staat stil, wat de GPS ook zegt
-        boolean voltsKnown = CarSignals.volts > 0 && System.currentTimeMillis() - CarSignals.voltsTime < 60_000L;
+        // alleen een betrouwbare spanning (geen oude waarde van vóór de slaap) mag "motor uit" zeggen
+        // (en niet ouder dan 60 s, zodat één lage melding de snelheid niet lang op 0 zet)
+        boolean voltsKnown = CarSignals.voltsTrusted() && System.currentTimeMillis() - CarSignals.voltsTime < 60_000L;
         boolean parked = CarSignals.contact == 0 || (voltsKnown && CarSignals.volts < 13.0f);
         // 2) GPS moet het eens zijn met zichzelf: snelheid én verplaatsing, een paar fixes achter elkaar
         float implied = -1f;
